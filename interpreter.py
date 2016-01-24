@@ -7,7 +7,7 @@ operators = {
     "+": add, # now is also SCAN
     "-": sub, # now is also FILTER
     "*": mul, # now is also MAP
-    "/": div, # now is also FOLD
+    "/": div, # now is also FOLD TODO: improve fold
     "%": mod,
     "^": exp,
     ">": gt,
@@ -35,6 +35,10 @@ operators = {
     "l": length, # also can test arity on a function
     "r": repeat,
     "t": transpose,
+    ")": pack,
+    "(": unpack,
+    "S": summation,
+    "P": product,
 }
 
 
@@ -129,10 +133,10 @@ def printall (encoding):
         except:
             char = "NONE"
             name = "NO CHARACTER"
-        print(str(i) + " " + char + " " + " "*(4-len(char)) + name)
+        print(str(i) + " " + char + " " + " "*(4 - len(char)) + name)
 
 if __name__ == "__main__":
-    q = input(">>> ")
-    while q != "quit":
-        interpret(q)
-        q = input(">>> ")
+    code = input(">>> ")
+    while code != "quit":
+        interpret(code)
+        code = input(">>> ")
