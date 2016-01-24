@@ -32,6 +32,7 @@ def truthy (x1):
         return True if len(x1) > 0 else False
     if get_type(x1) == "boolean":
         return x1
+    return False
 
 def var (value):
     def var_ (stack_manager):
@@ -164,14 +165,14 @@ def mul (x1, x2):
     elif t[0] == "stack" and t[1] == "function":
         s2 = Stack()
         for item in x1:
-            s = Stack(item)
+            s = Stack([item])
             s.push(x2)
             s2.push(s)
         return s2
     elif t[0] == "function" and t[1] == "stack":
         s2 = Stack()
         for item in x2:
-            s = Stack(item)
+            s = Stack([item])
             s.push(x1)
             s2.push(s)
         return s2
@@ -275,10 +276,7 @@ def dup (stack_manager):
     """1"""
     x1 = stack_manager.pop()
     for _ in range(2):
-        if not callable(x1):
-            stack_manager.push(x1)
-        else:
-            stack_manager.append(x1)
+        stack_manager.append(x1)
 
 def rot (stack_manager):
     """0"""
@@ -319,27 +317,22 @@ def incl_range (x1, x2):
         return Stack(reversed(range(x1, x2 + 1)))
 
 @stack_operation
-def get ():
+def get_input (): # simple implementation for now
     """0"""
-    returnlist = []
-    with open("stdin.txt") as f:
-        text = str(f.read())
-    lines = text.split("\n")
-    for line in lines:
-        contents = line.split(" ")
-        if not contents: continue
-        for item in contents:
-            try: returnlist.append(eval(item))
-            except: pass
-    if not returnlist: return Stack([])
-    return Stack(returnlist)
+    i = input("input: ")
+    i = eval(i)
+    t = get_type(i)
+    if t == "number":
+        return i
+    elif t == "stack":
+        return Stack(i)
 
 def swap (stack_manager):
     """0, 0"""
     stack_manager.swap()
 
 @stack_operation
-def arity_ (x1):
+def arity_ (x1): # likely to be removed, hard to see use case
     """1"""
     return arity(x1) if callable(x1) else 0
 
@@ -388,20 +381,38 @@ def repeat (stack_manager):
     for _ in range(x1):
         stack_manager.push(x2)
 
+@stack_operation
+def transpose (x1):
+    """1"""
+    t = get_type(x1)
+    if t == "stack":
+        resultstack = Stack()
+        for i in range(max(map(lambda x: len(Stack(x)), x1))):
+            resultstack.push([Stack(item)[i] for item in x1 if len(Stack(item)) > i])
+        return resultstack
+    else:
+        return x1
+
+
+
+
 #
 # Classes
 #
 
 
-class Stack (object):
+
+class Stack:
     def __init__ (self, contents=(), stack_manager=None):
         try:
             self.stack = [item for item in contents]
         except TypeError:
             self.stack = [contents]
         self.evalmode = ["normal"]  # doesn't matter unless no manager
-        self.stack_manager = stack_manager
-        if self.stack_manager is None: self.stack_manager = self
+        if stack_manager is None:
+            self.stack_manager = self
+        else:
+            self.stack_manager = stack_manager
 
     def clear (self):
         self.stack = []
@@ -414,7 +425,8 @@ class Stack (object):
                 self.append(item)
         elif get_type(item) == "stack":
             if len(item) == 1: self.push(item[0])
-            else: self.append(item)
+            else:
+                self.append(item)
         else:
             self.append(item)
 
@@ -492,7 +504,7 @@ class FStack (Stack):
     def __str__ (self):
         return "{" + ", ".join(str(item) if not type(item) == types.FunctionType else "<" + item.__name__ + ">" for item in self.stack) + "}"
 
-class Stack_Manager (object):
+class Stack_Manager:
     def __init__ (self, stacklist=None):
         self.stackpointer = (0, 0)
         self.stacklist = stacklist or {self.stackpointer:Stack((), self)}

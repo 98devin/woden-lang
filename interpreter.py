@@ -1,4 +1,5 @@
 from builtin import *
+import unicodedata
 
 operators = {
     "0": 0, "1": 1, "2": 2, "3": 3, "4": 4,
@@ -27,12 +28,13 @@ operators = {
     "!": define,
     "_": incl_range,
     ".": out,
-    "i": get, # get (input)
+    "i": get_input,
     ":": swap,
     "m": max_,
     "a": join,
     "l": length, # also can test arity on a function
     "r": repeat,
+    "t": transpose,
 }
 
 
@@ -41,18 +43,6 @@ def slice (iterable, slice_length):
 
 def interpret (datastring):
     s = Stack_Manager()
-    with open("stdin.txt") as f:
-        text = str(f.read())
-        fullcontents = []
-        for line in text.split("\n"):
-            linecontents = []
-            for item in line.split(" "):
-                try: linecontents.append(eval(item))
-                except: pass
-            if linecontents:
-                fullcontents.append(linecontents)
-    for content in fullcontents:
-        s.push(Stack(content))
     index = 0
     while index < len(datastring):
         token = ""
@@ -131,6 +121,15 @@ def base (number, newbase): # returns a list of digits. only works well for inte
     pointplace = -max(0, math.floor(math.log(number, newbase)))
     return digitlist
 
+def printall (encoding):
+    for i in range(256):
+        try:
+            char = bytes([i]).decode(encoding)
+            name = unicodedata.name(char, "NO NAME")
+        except:
+            char = "NONE"
+            name = "NO CHARACTER"
+        print(str(i) + " " + char + " " + " "*(4-len(char)) + name)
 
 if __name__ == "__main__":
     q = input(">>> ")
