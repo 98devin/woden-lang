@@ -35,12 +35,15 @@ def truthy (x1):
     return False
 
 def var (value):
+    # Stores a value inside a function for the stack.
+    # Not very useful anymore.
     def var_ (stack_manager):
         """0"""
         stack_manager.push(value)
     return var_
 
 def get_type (*args):
+    # Returns a simplified type signature for an input.
     typelist = []
     typedict = {
         int: "number",
@@ -59,8 +62,8 @@ def get_type (*args):
 def stack_operation (function):
     # A decorator which takes care of stack work.
     # The main drawback is that it wraps recursive calls too.
+    # This necessitates the basic_recursion decorator.
     # Perhaps this could be avoided, but I can't see how.
-
     def wrapper (stack_manager):
         args = (stack_manager.pop() for _ in range(arity(function)))
         result = function(*args)
@@ -69,11 +72,10 @@ def stack_operation (function):
                 try:
                     for item in iter(result):
                         stack_manager.push(item)
-                except:
+                except TypeError:
                     stack_manager.push(result)
             else:
                 stack_manager.push(result)
-
     w = wrapper
     w.__doc__ = function.__doc__
     w.__name__ = function.__name__
@@ -82,18 +84,18 @@ def stack_operation (function):
 def basic_recursion (function):
     # A decorator to implement auto-recursion/mapping on lists.
     # e.g. [123]3+ -> [456] and [123][123]+ -> [246]
-
+    # hopefully not slow because the decorator itself recurses.
+    # however, this should provide proper results at any depth.
     def wrapper (x1, x2):
         t = get_type(x1, x2)
         if t[0] == "stack" and t[1] == "number":
-            return Stack(function(item, x2) for item in x1)
+            return Stack(basic_recursion(function)(item, x2) for item in x1)
         elif t[0] == "number" and t[1] == "stack":
-            return Stack(function(x1, item) for item in x2)
+            return Stack(basic_recursion(function)(x1, item) for item in x2)
         elif t[0] == t[1] == "stack":
-            return Stack(function(b, a) for a, b in zip(x2, itertools.cycle(x1)))
+            return Stack(basic_recursion(function)(b, a) for a, b in zip(x2, itertools.cycle(x1)))
         else:
             return function(x1, x2)
-
     w = wrapper
     w.__doc__ = function.__doc__
     w.__name__ = function.__name__
@@ -110,9 +112,9 @@ def basic_recursion (function):
 def add (x1, x2):
     """2"""
     t = get_type(x1, x2)
-    if t[0] ==  t[1] == "number":
+    if t[0] ==  t[1] == "number": # Add
         return x2 + x1
-    elif t[0] == "stack" and t[1] == "function":
+    elif t[0] == "stack" and t[1] == "function": # Scanr
         s = Stack(reversed(x1))
         s2 = Stack()
         s2.push(s[-1])
@@ -120,7 +122,7 @@ def add (x1, x2):
             s.push(x2)
             s2.push(s[-1])
         return s2
-    elif t[0] == "function" and t[1] == "stack":
+    elif t[0] == "function" and t[1] == "stack": # Scanl
         s = Stack(x2)
         s2 = Stack()
         s2.push(s[-1])
@@ -134,9 +136,9 @@ def add (x1, x2):
 def sub (x1, x2):
     """2"""
     t = get_type(x1, x2)
-    if t[0] == t[1] == "number":
+    if t[0] == t[1] == "number": # Subtract
         return x2 - x1
-    elif t[0] == "stack" and t[1] == "function":
+    elif t[0] == "stack" and t[1] == "function": # Filter
         s = Stack(x1)
         l = []
         for i in range(len(s)):
@@ -145,7 +147,7 @@ def sub (x1, x2):
             if truthy(s1[-1]):
                 l.append(s[i])
         return Stack(l)
-    elif t[0] == "function" and t[1] == "stack":
+    elif t[0] == "function" and t[1] == "stack": # Filter
         s = Stack(x2)
         l = []
         for i in range(len(s)):
@@ -160,16 +162,16 @@ def sub (x1, x2):
 def mul (x1, x2):
     """2"""
     t = get_type(x1, x2)
-    if t[0] ==  t[1] == "number":
+    if t[0] ==  t[1] == "number": # Multiply
         return x2 * x1
-    elif t[0] == "stack" and t[1] == "function":
+    elif t[0] == "stack" and t[1] == "function": # Map
         s2 = Stack()
         for item in x1:
             s = Stack([item])
             s.push(x2)
             s2.push(s)
         return s2
-    elif t[0] == "function" and t[1] == "stack":
+    elif t[0] == "function" and t[1] == "stack": # Map
         s2 = Stack()
         for item in x2:
             s = Stack([item])
@@ -182,14 +184,14 @@ def mul (x1, x2):
 def div (x1, x2):
     """2"""
     t = get_type(x1, x2)
-    if t[0] ==  t[1] == "number":
+    if t[0] ==  t[1] == "number": # Divide
         return x2 / x1
-    elif t[0] == "stack" and t[1] == "function":
+    elif t[0] == "stack" and t[1] == "function": # Foldr
         s = Stack(reversed(x1))
         while len(s) > 1:
             s.push(x2)
         return s
-    elif t[0] == "function" and t[1] == "stack":
+    elif t[0] == "function" and t[1] == "stack": # Foldl
         s = Stack(x2)
         while len(s) > 1:
             s.push(x1)
@@ -204,6 +206,7 @@ def mod (x1, x2):
 @stack_operation
 @basic_recursion
 def exp (x1, x2):
+    """2"""
     return x2 ** x1
 
 @stack_operation
@@ -374,7 +377,6 @@ def length (x1):
     if t == "stack":
         return len(x1)
 
-
 def repeat (stack_manager):
     """2"""
     x1, x2 = stack_manager.pop(), stack_manager.pop()
@@ -393,6 +395,52 @@ def transpose (x1):
     else:
         return x1
 
+def pack (stack_manager): # packs all current stack contents up into one stack
+    """1"""
+    contents = Stack(stack_manager.get_stack())
+    stack_manager.get_stack().clear()
+    stack_manager.push(contents)
+
+def unpack (stack_manager): # unpacks a stack; pushes the contents
+    """1"""
+    x1 = stack_manager.pop()
+    t = get_type(x1)
+    if t == "stack":
+        for item in x1:
+            stack_manager.push(item)
+    else:
+        stack_manager.push(x1)
+
+@stack_operation
+def summation (x1): # deep sum, may be changed to work like '+/'
+    """1"""
+    return summation_(x1)
+def summation_ (x1):
+    """1"""
+    t = get_type(x1)
+    if t == "stack":
+        return sum(summation_(item) for item in x1)
+    elif t == "function":
+        return arity(x1)
+    else:
+        return x1
+
+@stack_operation # deep product, may be changed to work like '*/'
+def product (x1):
+    """1"""
+    return product_(x1)
+def product_ (x1):
+    """1"""
+    t = get_type(x1)
+    if t == "stack":
+        result = 1
+        for item in x1:
+            result *= product_(item)
+        return result
+    elif t == "function":
+        return arity(x1)
+    else:
+        return x1
 
 
 
@@ -424,9 +472,11 @@ class Stack:
             else:
                 self.append(item)
         elif get_type(item) == "stack":
-            if len(item) == 1: self.push(item[0])
-            else:
-                self.append(item)
+            if item:
+                if len(item) == 1:
+                    self.push(item[0])
+                else:
+                    self.append(item)
         else:
             self.append(item)
 
@@ -510,9 +560,12 @@ class Stack_Manager:
         self.stacklist = stacklist or {self.stackpointer:Stack((), self)}
         self.evalmode = ["normal"]
 
-    def clear (self):
+    def clear_manager (self):
         for stack_id in self.stacklist:
             self.stacklist[stack_id].clear()
+
+    def clear (self):
+        self.stack().clear()
 
     def stack (self, stack_id=None):
         if stack_id is not None:
@@ -542,7 +595,7 @@ class Stack_Manager:
     def evalmode_pop (self):
         self.evalmode.pop()
         if not self.evalmode:
-            self.evalmode = [("normal", True)]
+            self.evalmode = ["normal"]
 
     def rot (self, rotation_depth=3, rotation_amount=1):
         self.stack().rot(rotation_depth, rotation_amount)
