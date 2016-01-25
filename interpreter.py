@@ -1,5 +1,7 @@
 from builtin import *
 import unicodedata
+import sys
+from optparse import OptionParser
 
 operators = {
     "0": 0, "1": 1, "2": 2, "3": 3, "4": 4,
@@ -23,7 +25,6 @@ operators = {
     ";": dup,
     "@": rot,
     ",": drop,
-    "$": st_acc,
     "?": inquire,
     "!": define,
     "_": incl_range,
@@ -135,8 +136,22 @@ def printall (encoding):
             name = "NO CHARACTER"
         print(str(i) + " " + char + " " + " "*(4 - len(char)) + name)
 
-if __name__ == "__main__":
+def start_repl ():
+    print("Woden repl starting.")
+    print("Type 'quit' to exit.")
     code = input(">>> ")
     while code != "quit":
         interpret(code)
         code = input(">>> ")
+
+if __name__ == "__main__":
+    if sys.argv[1:]:
+        parser = OptionParser()
+        options, args = parser.parse_args()
+        parser.destroy()
+        if args:
+            interpret(args[0])
+        else:
+            start_repl()
+    else:
+        start_repl()

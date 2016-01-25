@@ -67,7 +67,7 @@ def stack_operation (function):
     def wrapper (stack_manager):
         args = (stack_manager.pop() for _ in range(arity(function)))
         result = function(*args)
-        if result:
+        if result is not None:
             if get_type(result) != "stack":
                 try:
                     for item in iter(result):
@@ -289,11 +289,6 @@ def drop (stack_manager):
     """1"""
     stack_manager.drop()
 
-def st_acc (stack_manager): # Needs to be reworked, perhaps
-    """1"""
-    x1 = stack_manager.stack(stack_manager.pop())
-    stack_manager.push(x1)
-
 def index (stack_manager):
     """0"""
     stack_manager.push(stack_manager.get_pointer())
@@ -331,7 +326,7 @@ def get_input (): # simple implementation for now
         return Stack(i)
 
 def swap (stack_manager):
-    """0, 0"""
+    """0"""
     stack_manager.swap()
 
 @stack_operation
