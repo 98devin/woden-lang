@@ -420,8 +420,8 @@ def summation_ (x1):
     else:
         return x1
 
-@stack_operation # deep product, may be changed to work like '*/'
-def product (x1):
+@stack_operation
+def product (x1): # deep product, may be changed to work like '*/'
     """1"""
     return product_(x1)
 def product_ (x1):
@@ -451,7 +451,7 @@ class Stack:
             self.stack = [item for item in contents]
         except TypeError:
             self.stack = [contents]
-        self.evalmode = ["normal"]  # doesn't matter unless no manager
+        self.evalmode = ["normal"]  # Doesn't matter unless there's no manager
         if stack_manager is None:
             self.stack_manager = self
         else:
@@ -549,7 +549,7 @@ class FStack (Stack):
     def __str__ (self):
         return "{" + ", ".join(str(item) if not type(item) == types.FunctionType else "<" + item.__name__ + ">" for item in self.stack) + "}"
 
-class Stack_Manager:
+class StackManager:
     def __init__ (self, stacklist=None):
         self.stackpointer = (0, 0)
         self.stacklist = stacklist or {self.stackpointer:Stack((), self)}
