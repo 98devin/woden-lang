@@ -73,6 +73,11 @@ This prevents nesting such as `[[[1]]]` which hinders access to the inner values
 but also prevents normal one-element lists such as `[1]`, transforming it to `1` before it is put onto the stack. This behavior
 is subject to change in the future.
 
+Because Woden does not have (nor do I plan to implement) a true string or character type, these data types will be represented
+as lists of numbers or single numbers respectively. This means the `#` syntax can be used to represent single characters, but
+writing a string this way would be `[#t#e#r#r#i#b#l#e]`. To remedy this, it is possible to surround a string with single quotes
+to generate a list of numbers (the previous atrocity could be represented as `'terrible'` instead). This also allows quick
+construction of lists of small numbers (or even up to ~180 once ASCII is used for this).
 
 ## 5. Functions
 
@@ -102,7 +107,29 @@ If it is reasonable for a function to work this way, it is probably implemented 
 This removes the need to `map` a function like `{4 +}` over the list instead,
 although the latter option provides more flexibility for complicated sequences of operations.
 
-## 6. Extra Notes
+## 6. Input
+
+Woden currently has one form of input, using the function/keyword `i`. More forms will certainly arrive in future updates.
+
+### Input with `i` and `$`
+
+Input with `i` is handled using a sort of injection. For each location in the code where `i` is found, a prompt for input will
+appear *before the code is executed*. This means that if the `i` is inside a loop, only one prompt will appear for it, and this same
+value will be used on each iteration. For example:
+```javascript
+[1 2 3] {i +} *
+```
+This code will not prompt for a new input with each map operation, adding the same input to each element of the list.
+
+`$` accesses the same input variable as the most recent `i` to have appeared before it. As such, if we modify the code:
+```javascript
+[1 2 3] {i +} * $ -
+```
+Because the `-` operator will auto-map on lists, and `$` will equal the first `i`, we will have returned to the list `[1, 2, 3]`.
+
+Currently no other forms of input exist.
+
+## 7. Extra Notes
 
 Because `[` and `]` (and similarly `{` and `}`) are functions of their own rather than syntactic sugar, they do not necessarily
 need to be matched. The `[` and `{` functions both begin a new stack, the difference being whether its contents will be evaluated.
