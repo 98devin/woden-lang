@@ -1,6 +1,7 @@
 import math
 import itertools
 import types
+import unicodedata
 
 
 #
@@ -33,14 +34,6 @@ def truthy (x1):
     if get_type(x1) == "boolean":
         return x1
     return False
-
-def var (value):
-    # Stores a value inside a function for the stack.
-    # Not very useful anymore.
-    def var_ (stack_manager):
-        """0"""
-        stack_manager.push(value)
-    return var_
 
 def get_type (*args):
     # Returns a simplified type signature for an input.
@@ -100,6 +93,56 @@ def basic_recursion (function):
     w.__doc__ = function.__doc__
     w.__name__ = function.__name__
     return w
+
+def num (string): # will probably be expanded to base 120 or 180 later
+    numdict = {
+        char:value for char, value in zip("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX", range(60))
+        }
+    result = 0
+    multiplier = 0
+    for char in reversed(string):
+        if char in numdict:
+            result += numdict[char] * 60**multiplier
+            multiplier += 1
+        elif char == ".":
+            result /= 60**multiplier
+            multiplier = 0
+    return result
+
+def base (number, newbase): # TODO make work properly
+    if newbase == 1: return [None]
+    n = number
+    b = newbase
+    digitlist = []
+    while b <= n: b *= newbase
+    while n > 1e-10:
+        while b > n:
+            b /= newbase
+            digitlist.append(0)
+        n = round(n-b, 15)
+        digitlist[-1] += 1
+    digitlist.extend(0 for _ in range(round(math.log(b, newbase))))
+    pointplace = -max(0, math.floor(math.log(number, newbase)))
+    return digitlist
+
+def printall (encoding):
+    for i in range(256):
+        try:
+            char = bytes([i]).decode(encoding)
+            name = unicodedata.name(char, "NO NAME")
+        except UnicodeDecodeError:
+            char = "NONE"
+            name = "NO CHARACTER"
+        print(str(i) + " " + char + " " + " "*(4 - len(char)) + name)
+
+
+#
+# Global variables *gasp!*
+#
+
+
+inputs = []
+dynamicoperators = {}
 
 
 #
@@ -301,10 +344,11 @@ def inquire (x1, x2, x3):
     else:
         return x1
 
-def define (stack_manager):
+@stack_operation
+def define (x1, x2):
     """2"""
-    x1, x2 = stack_manager.pop(), stack_manager.pop()
-    stack_manager.stack(x2).stack = [x1]
+    global dynamicoperators
+
 
 @stack_operation
 def incl_range (x1, x2):
@@ -315,15 +359,16 @@ def incl_range (x1, x2):
         return Stack(reversed(range(x1, x2 + 1)))
 
 @stack_operation
-def get_input (): # simple implementation for now
+def fetch_input (x1):
+    """1"""
+    global inputs
+    return inputs[x1]
+
+@stack_operation
+def last_input ():
     """0"""
-    i = input("input: ")
-    i = eval(i)
-    t = get_type(i)
-    if t == "number":
-        return i
-    elif t == "stack":
-        return Stack(i)
+    global inputs
+    return inputs[-1]
 
 def swap (stack_manager):
     """0"""
@@ -391,7 +436,7 @@ def transpose (x1):
         return x1
 
 def pack (stack_manager): # packs all current stack contents up into one stack
-    """1"""
+    """0"""
     contents = Stack(stack_manager.get_stack())
     stack_manager.get_stack().clear()
     stack_manager.push(contents)
@@ -420,8 +465,8 @@ def summation_ (x1):
     else:
         return x1
 
-@stack_operation # deep product, may be changed to work like '*/'
-def product (x1):
+@stack_operation
+def product (x1): # deep product, may be changed to work like '*/'
     """1"""
     return product_(x1)
 def product_ (x1):
@@ -438,11 +483,9 @@ def product_ (x1):
         return x1
 
 
-
 #
 # Classes
 #
-
 
 
 class Stack:
@@ -451,7 +494,7 @@ class Stack:
             self.stack = [item for item in contents]
         except TypeError:
             self.stack = [contents]
-        self.evalmode = ["normal"]  # doesn't matter unless no manager
+        self.evalmode = ["normal"]  # Doesn't matter unless there's no manager
         if stack_manager is None:
             self.stack_manager = self
         else:
@@ -533,23 +576,10 @@ class FStack (Stack):
     def push (self, item):
         self.stack.append(item)
 
-#    def update_arity (self):  # NO LONGER NECESSARY (but kinda cool)
-#        arity0 = [arity(x)[0] if isinstance(x, types.FunctionType) else 0 for x in self.stack] + [0]
-#        arity1 = [0] + [arity(x)[1] if isinstance(x, types.FunctionType) else 1 for x in self.stack]
-#        total_in = 0
-#        total_out = 0
-#        for i in range(len(self.stack) + 1):
-#            difference = arity0[i] - (arity1[i] + total_out)
-#            if difference > 0:
-#                total_in += difference
-#            else:
-#                total_out = -difference
-#        self.__doc__ = "{}, {}".format(total_in, total_out)
-
     def __str__ (self):
         return "{" + ", ".join(str(item) if not type(item) == types.FunctionType else "<" + item.__name__ + ">" for item in self.stack) + "}"
 
-class Stack_Manager:
+class StackManager:
     def __init__ (self, stacklist=None):
         self.stackpointer = (0, 0)
         self.stacklist = stacklist or {self.stackpointer:Stack((), self)}

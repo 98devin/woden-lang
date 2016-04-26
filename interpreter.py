@@ -1,5 +1,4 @@
 from builtin import *
-import unicodedata
 import sys
 from optparse import OptionParser
 
@@ -29,7 +28,8 @@ operators = {
     "!": define,
     "_": incl_range,
     ".": out,
-    "i": get_input,
+    "i": fetch_input, # Input is inserted in this item's position
+    "$": last_input, # Replaced with the most recent previous input
     ":": swap,
     "m": max_,
     "a": join,
@@ -46,14 +46,17 @@ operators = {
 def slice (iterable, slice_length):
     return (x[:slice_length] for x in iterable)
 
-def interpret (datastring):
-    s = Stack_Manager()
+def tokenize (datastring, prettyprint=False):
+    tokens = []
     index = 0
     while index < len(datastring):
-        token = ""
-        token += datastring[index]
+        # Token set to next character
+        token = datastring[index]
+        # If the token is the beginning of an operator:
         if token in slice(operators, 1):
             slice_length = 1
+            # Increase length of token and operator slice until they no longer match
+            # This normally happens because the token is too long
             while token in slice(operators, slice_length):
                 index += 1
                 if index >= len(datastring):
@@ -61,80 +64,104 @@ def interpret (datastring):
                 token += datastring[index]
                 slice_length += 1
             index += 1
+            # Reduce token until it matches an operator
             while not (token in operators) and not token == "":
                 token = token[0:-1]
                 index -= 1
+            # If the token never matched, just go to the next character
             if token == "":
                 index += 1
-            elif (token in operators):
-                s.push(operators[token])
+            # Otherwise, apply the operator it matched
+            elif token in operators:
+                tokens.append(operators[token])
+        # Use the '#' special character to push a number value
         elif token == "#":
             index += 1
-            try: s.push(num(datastring[index]))
-            except: pass
+            try:
+                tokens.append(num(datastring[index]))
+            except IndexError:
+                pass
             index += 1
+        # Find characters between ``, push as number
         elif token == "`":
             index += 1
             token = "0"
             while token[-1] != "`":
-                try: token += datastring[index]
-                except: break
+                try:
+                    token += datastring[index]
+                except IndexError:
+                    break
                 index += 1
             else: token = token[:-1]
-            s.push(var(num(token)))
+            tokens.append(num(token))
+        # Find characters between '', push as list of numbers
         elif token == "'":
             index += 1
             token = " "
             while token[-1] != "'":
-                try: token += datastring[index]
-                except: break
+                try:
+                    token += datastring[index]
+                except IndexError:
+                    break
                 index += 1
             else: token = token[:-1]
-            s.push(Stack(num(char) for char in token[1:]))
+            tokens.append(Stack(num(char) for char in token[1:]))
+        # If the token is something unknown, skip it entirely
         else:
             index += 1
+    if prettyprint:
+        print(", ".join(str(x) if get_type(x) != "function" else "<" + x.__name__ + ">" for x in tokens))
+    return tokens
+
+def receive_inputs (tokenstring):
+    # Very basic preprocessing for inputs.
+    # Will be expanded as necessary to support additional input types.
+    counter = 0
+    tokens = []
+    global inputs
+    inputs.clear()
+    for token in tokenstring:
+        if get_type(token) == "function":
+            if token.__name__ == "fetch_input":
+                i = input("input {}: ".format(counter+1))
+                i = eval(i)
+                t = get_type(i)
+                if t == "number":
+                    inputs.append(i)
+                elif t == "stack":
+                    inputs.append(Stack(i))
+                tokens.append(counter)
+                tokens.append(token)
+                counter += 1
+            elif token.__name__ == "last_input":
+                if counter >= 0:
+                    tokens.append(counter - 1)
+                    tokens.append(fetch_input)
+                else:
+                    i = input("input {}: ".format(counter+1))
+                    i = eval(i)
+                    t = get_type(i)
+                    if t == "number":
+                        inputs.append(i)
+                    elif t == "stack":
+                        inputs.append(Stack(i))
+                    tokens.append(counter)
+                    tokens.append(token)
+                    counter += 1
+            else:
+                tokens.append(token)
+        else:
+            tokens.append(token)
+    return tokens
+
+def interpret (datastring, prettyprint=False):
+    tokens = tokenize(datastring, prettyprint)
+    tokens = receive_inputs(tokens)
+    s = StackManager()
+    for token in tokens:
+        s.push(token)
     s.push(out)
 
-def num (string): # will probably be expanded to base 120 or 180 later
-    numdict = {
-        char:value for char, value in zip("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX", range(60))
-    }
-    result = 0
-    multiplier = 0
-    for char in reversed(string):
-        if char in numdict:
-            result += numdict[char] * 60**multiplier
-            multiplier += 1
-        elif char == ".":
-            result /= 60**multiplier
-            multiplier = 0
-    return result
-
-def base (number, newbase): # returns a list of digits. only works well for integers.
-    if newbase == 1: return [None]
-    n = number
-    b = newbase
-    digitlist = []
-    while b <= n: b *= newbase
-    while n > 1e-10:
-        while b > n:
-            b /= newbase
-            digitlist.append(0)
-        n = round(n-b, 15)
-        digitlist[-1] += 1
-    digitlist.extend(0 for _ in range(round(math.log(b, newbase))))
-    pointplace = -max(0, math.floor(math.log(number, newbase)))
-    return digitlist
-
-def printall (encoding):
-    for i in range(256):
-        try:
-            char = bytes([i]).decode(encoding)
-            name = unicodedata.name(char, "NO NAME")
-        except:
-            char = "NONE"
-            name = "NO CHARACTER"
-        print(str(i) + " " + char + " " + " "*(4 - len(char)) + name)
 
 def start_repl ():
     print("Woden repl starting.")
