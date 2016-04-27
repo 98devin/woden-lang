@@ -30,91 +30,103 @@ specials = [
 ]
 
 interpret = (code, flags={}) ->
-    ops = ^^operators # clone so runtime modifications are OK
+    
+    ops = ^^operators # clone so runtime modifications are OK if needed
     stacks = [[]]
     currentstack = 0
     stackoffset = 0
     applypushes = [true]
-    
     pos = 0
-    mainloop: while pos < code.length
+    
+    #
+    # functions to help parsing
+    #
+    
+    # parse one number
+    accept-number = ->
+        char = code[pos]
+        if char in ["0" to "9"]
+            if flags.multidigitnumbers
+                numstr = char
+                while pos < code.length and code[++pos] in ["0" to "9"]
+                    numstr += code[pos]
+                pos -- # this is to make sure the non-number char is still used.
+                +numstr
+            else +char
+        else null
+    
+    # parse one operator
+    accept-operator = ->
+        char = code[pos]
+        if char of ops
+            ops[char]
+        else
+            null
+    
+    # decrease 'nesting'
+    nesting-decrease = ->
+        applypushes.pop! if applypushes.length > 1
+        currentstack -= 1
+        if currentstack < 0
+            while stackoffset + currentstack < 0
+                stackoffset++
+                stacks.unshift []
+    
+    # increase 'nesting'
+    nesting-increase = (next-push-setting) ->
+        applypushes.push next-push-setting
+        currentstack++
+        if stacks.length - stackoffset < currentstack + 1
+            stacks.push []
+    
+    while pos < code.length
         char = code[pos]
         console.log ""
         apply = applypushes[*-1]
         stack = stacks[currentstack + stackoffset]
         
         # if it's an operator, apply it.
-        if char of ops
+        if (op = accept-operator!) isnt null
             if apply
-                b.push ops[char], stack
+                b.push op, stack
             else
-                stack.push ops[char]
+                stack.push op
             console.log JSON.stringify stack if flags.verbose
             
         # if it's a number, put it on the stack.
-        else if char in ["0" to "9"]
-            if flags.multidigitnumbers
-                numstr = char
-                while pos < code.length and code[++pos] in ["0" to "9"]
-                    numstr += code[pos]
-                stack.push +numstr
-                pos -- # this is to make sure the non-number char is still used.
-            else
-                stack.push +char
-            console.log JSON.stringify stack if flags.verbose
+        else if (num = accept-number!) isnt null
+            stack.push num
             
         # now to handle special characters which have special meanings
         else if char in specials
             switch specials.index-of char
             case 0 /* { */
-                applypushes.push false
-                currentstack++
-                if stacks.length - stackoffset < currentstack + 1
-                    stacks.push []
+                nesting-increase false
             case 1 /* } */
-                applypushes.pop! if applypushes.length > 1
-                currentstack -= 1
-                if currentstack < 0
-                    while stackoffset + currentstack < 0
-                        stackoffset++
-                        stacks.unshift []
+                nesting-decrease!
                 stacks[currentstack + stackoffset].push b.fseq stack
                 stacks[currentstack + stackoffset + 1] = []
             case 2 /* [ */
-                applypushes.push true
-                currentstack++
-                if stacks.length - stackoffset < currentstack + 1
-                    stacks.push []
+                nesting-increase true
             case 3 /* ] */
-                applypushes.pop! if applypushes.length > 1
-                currentstack -= 1
-                if currentstack < 0
-                    while stackoffset + currentstack < 0
-                        stackoffset++
-                        stacks.unshift []
+                nesting-decrease!
                 stacks[currentstack + stackoffset].push stack
                 stacks[currentstack + stackoffset + 1] = []
             case 4 /* ` */  # sugar for a one-operator fseq
                 if ++pos < code.length
-                    if code[pos] in ["0" to "9"]
-                        if flags.multidigitnumbers
-                            numstr = code[pos]
-                            while pos < code.length and code[++pos] in ["0" to "9"]
-                                numstr += code[pos]
-                            stack.push b.fseq [+numstr]
-                            pos -- # this is to make sure the non-number char is still used.
-                        else
-                            stack.push b.fseq [+char]
-                    else if code[pos] of ops
-                        stack.push b.fseq [ops[char]]
+                    if (num = accept-number!) isnt null
+                        stack.push b.fseq [num]
+                    else if (op = accept-operator!) isnt null
+                        stack.push b.fseq [op]
                     
-        
         # do some random final things
         if flags.verbose
             console.log "stack: #{currentstack}, offset: #{stackoffset}, apply: #{applypushes[*-1]}"
             console.log "all stacks:", JSON.stringify stacks
-        pos++ # finally, since it isn't a for loop after all
+        pos++ # since it isn't a for loop after all
+    
 
+# actually start the interpreter:
 process.stdin.resume!
 process.stdin.set-encoding \utf8
 process.stdin.on \data (text) ->
