@@ -12,36 +12,40 @@ operators =
     "<": b.lt
     ">": b.gt
     "=": b.eq
-    ",": b.drop
+    ",": b.drop1
     ":": b.swap
     ";": b.dup
-    "_": b.incl_range
+    "_": b.incl-range
     "!": b.apply
     ")": b.pack
     "(": b.unpack
     "@": b.rot
     "l": b.length
-    ".": b.print
-    
-# special characters which are not operators.
-# they generally just do something special within the intepreter.
+    "r": b.repeat
+    "j": b.join
+    "w": b.while-loop
+    "t": b.take
+    "d": b.drop
+    "s": b.bit-select
+
+# special-meaning characters which are not operators.
 specials = [
     "{" "}" "[" "]" "`"
 ]
 
 interpret = (code, flags={}) ->
-    
+
     ops = ^^operators # clone so runtime modifications are OK if needed
     stacks = [[]]
     currentstack = 0
     stackoffset = 0
     applypushes = [true]
     pos = 0
-    
+
     #
     # functions to help parsing
     #
-    
+
     # parse one number
     accept-number = ->
         char = code[pos]
@@ -52,9 +56,11 @@ interpret = (code, flags={}) ->
                     numstr += code[pos]
                 pos -- # this is to make sure the non-number char is still used.
                 +numstr
-            else +char
-        else null
-    
+            else
+                +char
+        else
+            null
+
     # parse one operator
     accept-operator = ->
         char = code[pos]
@@ -62,7 +68,7 @@ interpret = (code, flags={}) ->
             ops[char]
         else
             null
-    
+
     # decrease 'nesting'
     nesting-decrease = ->
         applypushes.pop! if applypushes.length > 1
@@ -71,20 +77,19 @@ interpret = (code, flags={}) ->
             while stackoffset + currentstack < 0
                 stackoffset++
                 stacks.unshift []
-    
+
     # increase 'nesting'
     nesting-increase = (next-push-setting) ->
         applypushes.push next-push-setting
         currentstack++
         if stacks.length - stackoffset < currentstack + 1
             stacks.push []
-    
+
     while pos < code.length
         char = code[pos]
-        console.log ""
         apply = applypushes[*-1]
         stack = stacks[currentstack + stackoffset]
-        
+
         # if it's an operator, apply it.
         if (op = accept-operator!) isnt null
             if apply
@@ -92,11 +97,11 @@ interpret = (code, flags={}) ->
             else
                 stack.push op
             console.log JSON.stringify stack if flags.verbose
-            
+
         # if it's a number, put it on the stack.
         else if (num = accept-number!) isnt null
             stack.push num
-            
+
         # now to handle special characters which have special meanings
         else if char in specials
             switch specials.index-of char
@@ -118,21 +123,25 @@ interpret = (code, flags={}) ->
                         stack.push b.fseq [num]
                     else if (op = accept-operator!) isnt null
                         stack.push b.fseq [op]
-                    
-        # do some random final things
+
         if flags.verbose
             console.log "stack: #{currentstack}, offset: #{stackoffset}, apply: #{applypushes[*-1]}"
             console.log "all stacks:", JSON.stringify stacks
-        pos++ # since it isn't a for loop after all
-    
+            console.log!
+        pos++ # since it isn't a for loop after
 
-# actually start the interpreter:
+    # finally, print the result
+    console.log JSON.stringify stacks[currentstack] unless flags.verbose
+    console.log!
+
+
+# actually start the interpreter
 process.stdin.resume!
 process.stdin.set-encoding \utf8
 process.stdin.on \data (text) ->
     if text is \quit
         process.exit!
     interpret text, {
-        +verbose
+        -verbose
         +multidigitnumbers
     }
