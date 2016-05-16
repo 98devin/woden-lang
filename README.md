@@ -1,4 +1,4 @@
-# Woden-lang
+# Woden
 A simple, stack-based, interpreted language implemented in [livescript](http://livescript.net/) (previously python).
 It is not purposefully esoteric, but functions/operators have one-character identifiers (assigned within reason).
 
@@ -26,7 +26,7 @@ This is the expected result of the expression. Success!
 
 Because Woden is stack-based, it is more natural for functions to be written _after_ their parameters, essentially in [reverse polish notation](https://en.wikipedia.org/wiki/Reverse_Polish_notation).
 This exposes the stack-based nature of the calculations and so causes less friction with the implementation.
-As an example, in order to calculate the value of 2 + 3, one would write `2 3 +`. 
+As an example, in order to calculate the value of 2 + 3, one would write `2 3 +`.
 One interesting and useful property of writing expressions this way is the elimination of the need for parentheses to reorder operations and their precedences.
 This can be demonstrated by converting from infix to postfix notation:
 ```javascript
@@ -44,8 +44,8 @@ such as function currying/partial application for free and high levels of compos
 Integer number literals can be written as you would expect in many other languages, with the exception
 that the `-` operator cannot be used in prefix form to specify a negative number. Currently the
 only method of obtaining a negative number is subtracting from zero.
-Floating-point support is also not present yet, but will be at some point. 
-Eventually, there is planned support for numbers in higher bases for more concise literals.
+Floating-point literals are also not present yet, but will be at some point.
+Eventually, there is planned support for numbers in higher bases as well for more concise literals.
 It is likely that the base will be one of 120, 180, etc. as they are highly divisible and so also allow the finite
 expression of some fractional numbers which are non-terminating in decimal (such as 1/3).
 
@@ -59,7 +59,7 @@ you should use either a function block or an unevaluated list (see extra notes).
 
 Because Woden does not have (nor do I plan to implement) a true string or character type, these data types will be represented
 as lists of numbers or single numbers respectively. To make it easier to enter this kind of list, it will be possible to surround text
-with single quotes to generate a list of numbers (thus `[116 104 105 115]` could be represented as `'this'` instead). 
+with single quotes to generate a list of numbers (thus `[116 104 105 115]` could be represented as `'this'` instead).
 This also allows quick construction of lists of small numbers (or even fairly high if extended ASCII is used for this).
 
 ## 5. Functions
@@ -92,8 +92,8 @@ although the latter option provides more flexibility for complicated sequences o
 
 ## 6. Input
 
-Woden currently has no form of input during execution in its newest iteration, beyond a commandline repl.
-Consider the version currently available a sort of desktop calculator, albeit with some other abilities.
+Woden currently has no form of input during execution in its newest iteration, just a commandline repl.
+Consider the version currently available a sort of desktop calculator, albeit with some cool abilities.
 Input of several kinds will definitely be supported in the future, likely through
 a more convenient html-based interface which has close interaction with the interpreter.
 
@@ -102,11 +102,11 @@ a more convenient html-based interface which has close interaction with the inte
 Because `[` and `]` (and similarly `{` and `}`) are functions of their own rather than syntactic sugar, they do not necessarily
 need to be matched. The `[` and `{` functions both begin a new stack, the difference being whether its contents will be evaluated.
 The `]` function compiles the stack into a list and pushes it onto the next-lowest stack,
-and the `}` function does the same but pushes a function block instead. 
+and the `}` function does the same but pushes a function block instead.
 Combining these behaviors one can achieve an *unevaluated list* (or, probably less usefully, an *evaluated function block*).
 ```javascript
 [1 2 3 +]     --> [1 5]
 {1 2 3 +]     --> [1 2 3 <add>]
-{[1 2] + +}   --> {[1 2] <add> <add>}
-[[1 2] + +}   --> {[2 3]} // This is the usage of `+` as the scanr operator
+{[1 2] + /}   --> {[1 2] <add> <div>}
+[[1 2] + /}   --> {[2 3]} // This is the usage of `/` as the fold/reduce operator
 ```
