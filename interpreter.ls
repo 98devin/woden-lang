@@ -1,7 +1,7 @@
 b = require "./builtins.js"
 
 # the operators which the interpreter will recognize.
-# there is currently no support for multi-character operators.
+# multicharacter operators are now supported.
 operators =
     "+": b.add
     "-": b.sub
@@ -12,7 +12,6 @@ operators =
     "<": b.lt
     ">": b.gt
     "=": b.eq
-    ",": b.drop1
     ":": b.swap
     ";": b.dup
     "_": b.incl-range
@@ -22,11 +21,16 @@ operators =
     "@": b.rot
     "l": b.length
     "r": b.repeat
-    "j": b.join
+    ",": b.concat
     "w": b.while-loop
     "t": b.take
     "d": b.drop
-    "s": b.bit-select
+    "|": b.bit-select
+    "s": b.sequence1
+    "S": b.sequence2
+    "e": b.elem
+    "T": b.type
+    "i": b.unary-range
 
 # special-meaning characters which are not operators.
 specials = [
@@ -43,31 +47,28 @@ interpret = (code, flags={}) ->
     pos = 0
 
     #
-    # functions to help parsing
+    # functions to help parsing; they return null on failure
     #
 
     # parse one number
     accept-number = ->
         char = code[pos]
-        if char in ["0" to "9"]
-            if flags.multidigitnumbers
-                numstr = char
-                while pos < code.length and code[++pos] in ["0" to "9"]
-                    numstr += code[pos]
-                pos -- # this is to make sure the non-number char is still used.
-                +numstr
-            else
-                +char
-        else
-            null
+        return null unless char in ["0" to "9"]
+        if flags.multidigitnumbers
+            while ++pos < code.length and code[pos] in ["0" to "9"]
+                char += code[pos]
+            pos -- # this is to make sure the non-number char is still used
+        +char
 
     # parse one operator
     accept-operator = ->
         char = code[pos]
-        if char of ops
-            ops[char]
-        else
-            null
+        return null unless char of ops
+        if flags.multicharacteroperators
+            while ++pos < code.length and char + code[pos] of ops
+                char += code[pos]
+            pos -- # this is to make sure the non-op char is still used
+        ops[char]
 
     # decrease 'nesting'
     nesting-decrease = ->
@@ -104,20 +105,20 @@ interpret = (code, flags={}) ->
 
         # now to handle special characters which have special meanings
         else if char in specials
-            switch specials.index-of char
-            case 0 /* { */
+            switch char
+            case "{"
                 nesting-increase false
-            case 1 /* } */
+            case "}"
                 nesting-decrease!
                 stacks[currentstack + stackoffset].push b.fseq stack
                 stacks[currentstack + stackoffset + 1] = []
-            case 2 /* [ */
+            case "["
                 nesting-increase true
-            case 3 /* ] */
+            case "]"
                 nesting-decrease!
                 stacks[currentstack + stackoffset].push stack
                 stacks[currentstack + stackoffset + 1] = []
-            case 4 /* ` */  # sugar for a one-operator fseq
+            case "`" # sugar for a one-item fseq
                 if ++pos < code.length
                     if (num = accept-number!) isnt null
                         stack.push b.fseq [num]
@@ -144,4 +145,5 @@ process.stdin.on \data (text) ->
     interpret text, {
         -verbose
         +multidigitnumbers
+        +multicharacteroperators
     }
