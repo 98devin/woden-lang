@@ -7,6 +7,7 @@
 
 # main function to call to push anything to a stack
 export push = (item, arr) -->
+    return arr if item is null
     if type(item) is \Function and arr.length >= (item.arity ? 0)
         if item.manualpush
             item arr
@@ -42,7 +43,7 @@ manualpush = (f) ->
 
 # decorator-ish thing to set arity of a function
 arity = (ar, f) -->
-    f.arity = ar
+    f.arity = ar ? 0
     f
 
 # function for generating stack push sequences
@@ -54,6 +55,7 @@ export fseq = (sequence) ->
             else                  # otherwise, {x} is functionally identical to {{x}}
                 stack.push item
     f.is-fseq = true
+    f.seq = sequence
     f
 
 flatten = (arr) ->
@@ -74,11 +76,44 @@ deep-flatten = (arr) ->
             res.push item
     res
 
-truthy = (thing) ->
-    | thing == 0    => false
-    | thing == null => false
-    | otherwise     => true
+truthy = ->
+    switch it
+    case 0            => false
+    case null, false  => false
+    else              => true
 
+
+# the special 'rune' functions.
+export runes = {
+    # syntactic sugar for a fseq, ex. `+ for {+} and ``+ for {{+}}
+    "`": (a) ->
+        fseq [a]
+
+    # the `on` combinator. (f ᚶ g)(a, b) = f(g(a), g(b))
+    "ᚶ": (a, b) ->
+        manualpush arity((a.arity ? 0) * (b.arity ? 0)) (stack) ->
+            stack.push (push a, flatten [push b, [stack.pop! for til b.arity ? 0] for til a.arity ? 0])
+
+    # apply function but leave input on the stack
+    "ᚽ": (a) ->
+        manualpush arity(a.arity) (stack) ->
+            stack.push a ...take(-a.arity, stack)
+
+    # apply function but leave input on the stack, and on top
+    "ᛑ": (a) ->
+        manualpush arity(a.arity) (stack) ->
+            args = [stack.pop! for til a.arity]
+            stack.push a ...args
+            for item in args.reverse!
+                stack.push item
+
+    # reverse application. planned to be changed, since it's equal to ":!"
+    "ᛙ": (a) ->
+        manualpush arity(0) (stack) ->
+            top = stack.pop!
+            stack.push a
+            push top, stack
+}
 
 #
 # Functions intended to be pushed to the stack
@@ -86,7 +121,7 @@ truthy = (thing) ->
 
 
 export type = arity(1) (a) ->
-    a?.constructor?.name ? \Null
+    a?.constructor.name ? \Null
 
 export add = arity(2) (a, b) ->
     # addition on numbers
@@ -169,7 +204,22 @@ export lt  = arity(2) (a, b) ->
     if b < a then 1 else 0
 
 export eq  = arity(2) (a, b) ->
-    if b is a then 1 else 0
+    return 1 if a is b
+    return 0 if type(a) != type(b)
+    if type(a) is \Array
+        return 0 if a.length != b.length
+        for i til a.length
+            return 0 unless eq(a[i], b[i])
+        return 1
+    else if type(a) is \Function
+        return 0 unless a.is-fseq and b.is-fseq
+        return eq(a.seq, b.seq)
+    else if type(a) is \Sequence
+        return 0 unless eq(a.get-next, b.get-next)
+        len = Math.max(a.length, b.length)
+        a.ensure-length len
+        b.ensure-length len
+        return eq(a.base-seq, b.base-seq)
 
 export dup = manualpush arity(1) (stack) ->
     top = stack.pop!
@@ -254,8 +304,9 @@ export while-loop = manualpush arity(2) (stack) !->
 
 export take = arity(2) (a, b) ->
     if type(b) is \Array
-        return b if Math.abs(a) >= b.length # small optimization
-        return take(-a, b.reverse!).reverse! if a < 0
+        return [] if a == 0
+        return b if Math.abs(a) >= b.length
+        return drop(b.length + a, b) if a < 0
         b[til Math.floor(a)]
     else if type(b) is \Sequence
         b.ensure-length(Math.floor(a))
@@ -263,12 +314,13 @@ export take = arity(2) (a, b) ->
 
 export drop = arity(2) (a, b) ->
     if type(b) is \Array
-        return [] if Math.abs(a) >= b.length # small optimization
-        return drop(-a, b.reverse!).reverse! if a < 0
+        return b if a == 0
+        return [] if Math.abs(a) >= b.length
+        return take(b.length + a, b) if a < 0
         b[Math.floor(a) to]
     else if type(b) is \Sequence
         b.ensure-length(Math.floor(a))
-        b.seq = []
+        b.seq = drop(a, b.seq)
         b
 
 export bit-select = arity(2) (a, b) ->
@@ -291,16 +343,15 @@ export bit-select = arity(2) (a, b) ->
 # a data structure representing lazily-generated infinite sequences
 export class Sequence
     (@get-next, @base-seq = [0]) ~>
-        @transforms = [] # should contain {type, func} objects with type = 'filter' or 'map'
+        @transforms = [] # should contain {type, func} objects
         @seq = []        # the sequence, filtered and mapped
         @base-pos = 0    # the element being accessed by the transform processor
-        @length = 0
-
-    to-JSON: -> "[...]"
 
     get: (index) ->
-        @ensure-length(index + 1)
-        @seq[index]
+        if @ensure-length(index + 1)
+            @seq[index]
+        else
+            null
 
     lengthen-base-seq: ->
         #console.log "base: #{JSON.stringify @base-seq}"
@@ -320,8 +371,9 @@ export class Sequence
             @length = @seq.length
             @transforms.push transform
 
-    ensure-length: (desired-length) !->
+    ensure-length: (desired-length, give-up-after = 100) ->
         # ensures that the sequence contains at least `desired-length` elements
+        times-tried = 0
         :main until @seq.length >= desired-length
             @lengthen-base-seq!
             item = [@base-seq[@base-pos]]
@@ -330,12 +382,14 @@ export class Sequence
                 case \filter
                     unless truthy (push transform.func, ^^item)[*-1]
                         @base-pos++
+                        return false if (times-tried++ > give-up-after)
                         continue main
+                    times-tried = 0
                 case \map
                     item = push transform.func, item
             @seq .= concat item
             @base-pos++
-            @length = @seq.length
+        return true # notify success
 
 export sequence1 = arity(1) (a) ->
     # constructs a sequence with initial base sequence of [0] by default
@@ -351,3 +405,9 @@ export elem = arity(2) (a, b) ->
         b[a]
     else if type(b) is \Sequence
         b.get(a)
+
+export neg = arity(1) (a) ->
+    if type(a) is \Number
+        -a - 1
+    else if type(a) is \Array
+        a.reverse!

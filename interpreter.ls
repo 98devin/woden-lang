@@ -1,149 +1,79 @@
-b = require "./builtins.js"
+require! "./parser.js"
+require! "./builtins.js"
 
-# the operators which the interpreter will recognize.
-# multicharacter operators are now supported.
-operators =
-    "+": b.add
-    "-": b.sub
-    "*": b.mul
-    "/": b.div
-    "%": b.mod
-    "^": b.exp
-    "<": b.lt
-    ">": b.gt
-    "=": b.eq
-    ":": b.swap
-    ";": b.dup
-    "_": b.incl-range
-    "!": b.apply
-    ")": b.pack
-    "(": b.unpack
-    "@": b.rot
-    "l": b.length
-    "r": b.repeat
-    ",": b.concat
-    "w": b.while-loop
-    "t": b.take
-    "d": b.drop
-    "|": b.bit-select
-    "s": b.sequence1
-    "S": b.sequence2
-    "e": b.elem
-    "T": b.type
-    "i": b.unary-range
+# slightly configured stringifier for nicer output
+stringify = (a) ->
+    JSON.stringify a, (k, v)->
+        return \F if builtins.type(v) is \Function
+        return \S if builtins.type(v) is \Sequence
+        return v
+    .replace(/"F"/g, "ƒ")     # show functions more clearly
+    .replace(/"S"/g, "[...]") # show sequences more clearly
+    .replace(/,/g,   " ")     # separate with space instead of commas
 
-# special-meaning characters which are not operators.
-specials = [
-    "{" "}" "[" "]" "`"
-]
 
-interpret = (code, flags={}) ->
+interpret = (ast, flags={}) ->
 
-    ops = ^^operators # clone so runtime modifications are OK if needed
-    stacks = [[]]
-    currentstack = 0
-    stackoffset = 0
-    applypushes = [true]
-    pos = 0
+    if typeof! ast is \String
+        ast = parser.parse(ast, flags)
 
-    #
-    # functions to help parsing; they return null on failure
-    #
-
-    # parse one number
-    accept-number = ->
-        char = code[pos]
-        return null unless char in ["0" to "9"]
-        if flags.multidigitnumbers
-            while ++pos < code.length and code[pos] in ["0" to "9"]
-                char += code[pos]
-            pos -- # this is to make sure the non-number char is still used
-        +char
-
-    # parse one operator
-    accept-operator = ->
-        char = code[pos]
-        return null unless char of ops
-        if flags.multicharacteroperators
-            while ++pos < code.length and char + code[pos] of ops
-                char += code[pos]
-            pos -- # this is to make sure the non-op char is still used
-        ops[char]
-
-    # decrease 'nesting'
-    nesting-decrease = ->
-        applypushes.pop! if applypushes.length > 1
-        currentstack -= 1
-        if currentstack < 0
-            while stackoffset + currentstack < 0
-                stackoffset++
-                stacks.unshift []
-
-    # increase 'nesting'
-    nesting-increase = (next-push-setting) ->
-        applypushes.push next-push-setting
-        currentstack++
-        if stacks.length - stackoffset < currentstack + 1
-            stacks.push []
-
-    while pos < code.length
-        char = code[pos]
-        apply = applypushes[*-1]
-        stack = stacks[currentstack + stackoffset]
-
-        # if it's an operator, apply it.
-        if (op = accept-operator!) isnt null
-            if apply
-                b.push op, stack
-            else
-                stack.push op
-            console.log JSON.stringify stack if flags.verbose
-
-        # if it's a number, put it on the stack.
-        else if (num = accept-number!) isnt null
-            stack.push num
-
-        # now to handle special characters which have special meanings
-        else if char in specials
-            switch char
-            case "{"
-                nesting-increase false
-            case "}"
-                nesting-decrease!
-                stacks[currentstack + stackoffset].push b.fseq stack
-                stacks[currentstack + stackoffset + 1] = []
-            case "["
-                nesting-increase true
-            case "]"
-                nesting-decrease!
-                stacks[currentstack + stackoffset].push stack
-                stacks[currentstack + stackoffset + 1] = []
-            case "`" # sugar for a one-item fseq
-                if ++pos < code.length
-                    if (num = accept-number!) isnt null
-                        stack.push b.fseq [num]
-                    else if (op = accept-operator!) isnt null
-                        stack.push b.fseq [op]
-
-        if flags.verbose
-            console.log "stack: #{currentstack}, offset: #{stackoffset}, apply: #{applypushes[*-1]}"
-            console.log "all stacks:", JSON.stringify stacks
+    # evaluate a token recursively
+    evaluate = (token, extra=[]) ->
+        console.log "Evaluating Token: #{JSON.stringify token}" if flags.verbose
+        switch token.type
+        case \number \operator
+            token.value
+        case \list
+            stack = []
+            for item in token.value
+                if not token.evaluate or item.type is \function
+                    stack.push evaluate(item, extra)
+                else
+                    builtins.push evaluate(item, extra), stack
+            return stack
+        case \function
+            stack = []
+            for item in token.value
+                if not token.evaluate or item.type is \function
+                    stack.push evaluate(item, extra)
+                else
+                    builtins.push evaluate(item, extra), stack
+            return builtins.fseq stack
+        case \prefix-operator
+            args = []
+            for item in token.arguments
+                args.push evaluate(item, extra)
+            return builtins.runes[token.value] ...args
+        case \block
+            for item in token.value
+                if item.type is \function
+                    extra.push evaluate(item, extra)
+                else
+                    res = evaluate(item, extra)
+                    if res.is-fseq       # this is disgusting to me, but it works. :/
+                        extra.push res   # if it didn't require special treatment, it'd be better.
+                    else
+                        builtins.push res, extra
+            return extra
+        case \program
+            mainblock = token.value[0]
+            stack = []
+            evaluate(mainblock, stack)
+            console.log stringify stack
             console.log!
-        pos++ # since it isn't a for loop after
 
-    # finally, print the result
-    console.log JSON.stringify stacks[currentstack] unless flags.verbose
-    console.log!
+    evaluate(ast) # evaluate the program
 
 
-# actually start the interpreter
+# start the interpreter
 process.stdin.resume!
 process.stdin.set-encoding \utf8
+process.stdout.write ">> "
 process.stdin.on \data (text) ->
     if text is \quit
         process.exit!
     interpret text, {
         -verbose
-        +multidigitnumbers
-        +multicharacteroperators
+        +multi-digit-numbers
     }
+    process.stdout.write ">> "
