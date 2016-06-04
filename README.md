@@ -57,12 +57,17 @@ What is written `[1, 2, 3, 4]` in many languages is simply `[1 2 3 4]` in 
 list is pushed to the stack, thus `[1 2 3 +]` is equivalent to `[1 5]`. If you want to have a function as an element of a normal list,
 you should use either a function block or an unevaluated list (see extra notes). Lists can be nested to any depth.
 
-Because Woden does not have a true string or character type, these data types will be represented
-as lists of numbers or single numbers respectively. To make it easier to enter this kind of list, it will probably be possible eventually to surround text
-with double quotes to generate a list of numbers (thus `[116 104 105 115]` could be represented like `"this"` instead).
-This also allows quick construction of lists of small numbers (up to 255, since each character is one byte).
 
-## 5. Functions
+## 5. "Strings"
+
+Because Woden does not have a true string or character type, these data types are represented
+as lists of numbers or single numbers respectively. To make it easier to enter this kind of list, it is possible to surround text
+with double quotes to generate a list of numbers (thus `[116 104 105 115]` can be represented like `"this"` instead).
+This also allows quick construction of lists of small numbers (up to 255, since each character is one byte). Similarly,
+single characters are represented as letters/numbers preceeded by an apostrophe (`'`). For all printable ASCII characters
+the output should be what is expected, hence `'a` is equal to `97`.
+
+## 6. Functions
 
 Each function in Woden has a specified *arity*, that is, the number of parameters it needs to operate. This means no function
 in the language uses a variable number of arguments for calculation (though some may operate on the whole stack). This
@@ -84,7 +89,7 @@ acts as multiplication on numbers but as the `map` function when used on a list 
 [1 2 3] {3 +} *    // [4, 5, 6]
 ```
 
-## 6. Sequences
+## 7. Sequences
 
 Sequences in Woden aim to provide a way to interact with infinite sequences of values without sacrificing
 the ease of mapping, filtering, etc. which lists enable. Any operation which makes sense to perform on infinite
@@ -102,16 +107,16 @@ Sample usage:
 As you can see, Sequences are already fairly powerful, and can be used to implement certain kinds of
 recursive algorithms.
 
-## 7. Input
+## 8. Input
 
 Woden currently has no form of input during execution in its newest iteration, just a commandline repl.
 Consider the version currently available a sort of desktop calculator, albeit with some cool abilities.
 Input of several kinds will definitely be supported in the future, likely through
 a more convenient html-based interface which has close interaction with the interpreter.
 
-## 8. Extra Notes
+## 9. Extra Notes
 
-The syntax for lists and function blocks actually allows for the use of "]" or "}" as the closing
+The syntax for lists and function blocks actually allows for the use of `]` or `}` as the closing
 character for either. Which is used impacts whether the contents will be evaluated or not. Through this
 usage, one can create a list of functions for example, or (perhaps less usefully) have the contents of
 a function block evaluated before being pushed to the stack.

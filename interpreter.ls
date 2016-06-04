@@ -14,66 +14,80 @@ stringify = (a) ->
 
 interpret = (ast, flags={}) ->
 
+    if flags.verbose
+        time = process.hrtime! # start time of interpretation
+
     if typeof! ast is \String
+        if flags.verbose
+            console.log "Input: #{ast}"
         ast = parser.parse(ast, flags)
 
-    # evaluate a token recursively
-    evaluate = (token, extra=[]) ->
+    # evaluate a token recursively.
+    # input is a token, a stack to push things to, and a copy of the ast.
+    evaluate = (token, stack=[], ast = ast) ->
         console.log "Evaluating Token: #{JSON.stringify token}" if flags.verbose
         switch token.type
         case \number \operator
             token.value
         case \list
-            stack = []
+            mystack = []
             for item in token.value
                 if not token.evaluate or item.type is \function
-                    stack.push evaluate(item, extra)
+                    mystack.push evaluate(item, stack)
                 else
-                    builtins.push evaluate(item, extra), stack
-            return stack
+                    builtins.push evaluate(item, stack), mystack
+            return mystack
         case \function
-            stack = []
+            mystack = []
             for item in token.value
                 if not token.evaluate or item.type is \function
-                    stack.push evaluate(item, extra)
+                    mystack.push evaluate(item, stack)
                 else
-                    builtins.push evaluate(item, extra), stack
-            return builtins.fseq stack
+                    builtins.push evaluate(item, stack), mystack
+            return builtins.fseq mystack
         case \prefix-operator
             args = []
-            for item in token.arguments
-                args.push evaluate(item, extra)
-            return builtins.runes[token.value] ...args
+            if token.evaluate
+                for item in token.arguments
+                    args.push evaluate(item, stack)
+            else
+                args = token.arguments
+            return token.value ...args.concat(evaluate)
         case \block
             for item in token.value
                 if item.type is \function
-                    extra.push evaluate(item, extra)
+                    stack.push evaluate(item, stack)
                 else
-                    res = evaluate(item, extra)
+                    res = evaluate(item, stack)
                     if res.is-fseq       # this is disgusting to me, but it works. :/
-                        extra.push res   # if it didn't require special treatment, it'd be better.
+                        stack.push res   # if it didn't require special treatment, it'd be better.
                     else
-                        builtins.push res, extra
-            return extra
+                        builtins.push res, stack
+            return stack
+        case \block-reference
+            return builtins.mega-fseq(evaluate, ast-copy.value[token.value])
         case \program
             mainblock = token.value[0]
-            stack = []
-            evaluate(mainblock, stack)
-            console.log stringify stack
+            progstack = []
+            evaluate(mainblock, progstack)
+            if flags.verbose
+                [secs, usecs] = process.hrtime(time)
+                console.log "Total time taken: #{secs + usecs * 1e-9} seconds"
+            console.log stringify progstack
             console.log!
 
     evaluate(ast) # evaluate the program
 
 
 # start the interpreter
-process.stdin.resume!
-process.stdin.set-encoding \utf8
 process.stdout.write ">> "
+process.stdin.set-encoding \utf8
 process.stdin.on \data (text) ->
     if text is \quit
         process.exit!
     interpret text, {
-        -verbose
+        verbose: '-v' in process.argv
         +multi-digit-numbers
+        -multi-digit-references
     }
     process.stdout.write ">> "

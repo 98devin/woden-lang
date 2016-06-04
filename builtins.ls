@@ -1,7 +1,7 @@
 
 
 #
-# Utility functions
+# Utility functions, used only internally or by the interpreter
 #
 
 
@@ -58,6 +58,13 @@ export fseq = (sequence) ->
     f.seq = sequence
     f
 
+# function for getting some interpreter functionality on the stack.
+# it needs a reference to the evaluation function and the block to push.
+# it also needs a copy of the ast to allow for deeper recursion.
+export mega-fseq = (evaluate, block, ast-copy) ->
+    manualpush arity(0) (stack) !->
+        evaluate(block, stack, ast-copy) # that oughta do it
+
 flatten = (arr) ->
     res = []
     for item in arr
@@ -83,24 +90,25 @@ truthy = ->
     else              => true
 
 
-# the special 'rune' functions.
+# the special 'rune' functions (prefixed functions).
+# they have the option of accepting a reference to the evaluation function and ast if needed.
 export runes = {
     # syntactic sugar for a fseq, ex. `+ for {+} and ``+ for {{+}}
-    "`": (a) ->
+    fseq: (a) ->
         fseq [a]
 
     # the `on` combinator. (f ᚶ g)(a, b) = f(g(a), g(b))
-    "ᚶ": (a, b) ->
+    on-combinator: (a, b) ->
         manualpush arity((a.arity ? 0) * (b.arity ? 0)) (stack) ->
             stack.push (push a, flatten [push b, [stack.pop! for til b.arity ? 0] for til a.arity ? 0])
 
     # apply function but leave input on the stack
-    "ᚽ": (a) ->
+    non-consuming-apply: (a) ->
         manualpush arity(a.arity) (stack) ->
             stack.push a ...take(-a.arity, stack)
 
     # apply function but leave input on the stack, and on top
-    "ᛑ": (a) ->
+    non-consuming-apply-swap: (a) ->
         manualpush arity(a.arity) (stack) ->
             args = [stack.pop! for til a.arity]
             stack.push a ...args
@@ -108,15 +116,25 @@ export runes = {
                 stack.push item
 
     # reverse application. planned to be changed, since it's equal to ":!"
-    "ᛙ": (a) ->
+    reverse-apply: (a) ->
         manualpush arity(0) (stack) ->
             top = stack.pop!
             stack.push a
             push top, stack
+
+    # conditional branch. (a ? b c) is similar to (a ? b : c) in c-like languages.
+    conditional1: (b, c, evaluate) ->
+        manualpush arity(1) (stack) ->
+            a = stack.pop!
+            if truthy a
+                push evaluate(b, stack), stack
+            else
+                push evaluate(c, stack), stack
 }
 
+
 #
-# Functions intended to be pushed to the stack
+# Functions which can be pushed to the stack
 #
 
 
@@ -135,7 +153,6 @@ export add = arity(2) (a, b) ->
     else if type(a) is \Array and type(b) is \Function
         a[1 to].reduce ((previous, nextitem) ->
             previous.concat push b, [previous[*-1], nextitem]), [a[0]]
-
 
 export sub = arity(2) (a, b) ->
     # subtraction on numbers
@@ -156,7 +173,6 @@ export sub = arity(2) (a, b) ->
             func: a
         }
         b
-
 
 export mul = arity(2) (a, b) ->
     # multiplication on numbers
@@ -197,13 +213,13 @@ export mod = arity(2) (a, b) -> b % a
 
 export exp = arity(2) (a, b) -> b ^ a
 
-export gt  = arity(2) (a, b) ->
+export gt = arity(2) (a, b) ->
     if b > a then 1 else 0
 
-export lt  = arity(2) (a, b) ->
+export lt = arity(2) (a, b) ->
     if b < a then 1 else 0
 
-export eq  = arity(2) (a, b) ->
+export eq = arity(2) (a, b) ->
     return 1 if a is b
     return 0 if type(a) != type(b)
     if type(a) is \Array
@@ -220,8 +236,9 @@ export eq  = arity(2) (a, b) ->
         a.ensure-length len
         b.ensure-length len
         return eq(a.base-seq, b.base-seq)
+    return 0
 
-export dup = manualpush arity(1) (stack) ->
+export dup = manualpush arity(1) (stack) !->
     top = stack.pop!
     stack.push top
     stack.push top
