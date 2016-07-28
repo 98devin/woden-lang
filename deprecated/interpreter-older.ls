@@ -1,4 +1,4 @@
-b = require "./builtins.js"
+b = require "./builtins-old.js"
 
 # the operators which the interpreter will recognize.
 # multicharacter operators are disabled.

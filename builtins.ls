@@ -1,8 +1,10 @@
 
 
+
 #
 # Utility functions, used only internally or by the interpreter
 #
+
 
 
 # main function to call to push anything to a stack
@@ -42,13 +44,13 @@ manualpush = (f) ->
     f
 
 # decorator-ish thing to set arity of a function
-arity = (ar, f) -->
-    f.arity = ar ? 0
+arity = (ar, f) ->
+    f.arity = ar
     f
 
 # function for generating stack push sequences
 export fseq = (sequence) ->
-    f = manualpush arity(0) (stack) !->
+    f = manualpush arity 0 (stack) !->
         for item in sequence
             if !item.is-fseq      # do not apply internal fseqs when pushing.
                 push item, stack  # this is to allow for proper nesting.
@@ -59,11 +61,11 @@ export fseq = (sequence) ->
     f
 
 # function for getting some interpreter functionality on the stack.
-# it needs a reference to the evaluation function and the block to push.
-# it also needs a copy of the ast to allow for deeper recursion.
-export mega-fseq = (evaluate, block, ast-copy) ->
-    manualpush arity(0) (stack) !->
-        evaluate(block, stack, ast-copy) # that oughta do it
+# it needs a reference to the evaluation function and the values to push
+export mega-fseq = (evaluate, values, AST, ENV) ->
+    manualpush arity 0 (stack) !->
+        for node in values
+            evaluate(node, stack, AST, ENV) # that oughta do it better
 
 flatten = (arr) ->
     res = []
@@ -83,54 +85,16 @@ deep-flatten = (arr) ->
             res.push item
     res
 
-truthy = ->
+export truthy = ->
     switch it
     case 0            => false
     case null, false  => false
     else              => true
 
 
-# the special 'rune' functions (prefixed functions).
-# they have the option of accepting a reference to the evaluation function and ast if needed.
-export runes = {
-    # syntactic sugar for a fseq, ex. `+ for {+} and ``+ for {{+}}
-    fseq: (a) ->
-        fseq [a]
+# RUNES HAVE BEEN ABOLISHED IN THE NEW INTERPRETER
+# THEIR FUNCTIONALITY WILL REMAIN IN THE FORM OF OTHER BUILT-INS OR REGULAR FUNCTIONS
 
-    # the `on` combinator. (f ᚶ g)(a, b) = f(g(a), g(b))
-    on-combinator: (a, b) ->
-        manualpush arity((a.arity ? 0) * (b.arity ? 0)) (stack) ->
-            stack.push (push a, flatten [push b, [stack.pop! for til b.arity ? 0] for til a.arity ? 0])
-
-    # apply function but leave input on the stack
-    non-consuming-apply: (a) ->
-        manualpush arity(a.arity) (stack) ->
-            stack.push a ...take(-a.arity, stack)
-
-    # apply function but leave input on the stack, and on top
-    non-consuming-apply-swap: (a) ->
-        manualpush arity(a.arity) (stack) ->
-            args = [stack.pop! for til a.arity]
-            stack.push a ...args
-            for item in args.reverse!
-                stack.push item
-
-    # reverse application. planned to be changed, since it's equal to ":!"
-    reverse-apply: (a) ->
-        manualpush arity(0) (stack) ->
-            top = stack.pop!
-            stack.push a
-            push top, stack
-
-    # conditional branch. (a ? b c) is similar to (a ? b : c) in c-like languages.
-    conditional1: (b, c, evaluate) ->
-        manualpush arity(1) (stack) ->
-            a = stack.pop!
-            if truthy a
-                push evaluate(b, stack), stack
-            else
-                push evaluate(c, stack), stack
-}
 
 
 #
@@ -138,88 +102,72 @@ export runes = {
 #
 
 
-export type = arity(1) (a) ->
+# Any
+export type = arity 1 (a) ->
     a?.constructor.name ? \Null
 
-export add = arity(2) (a, b) ->
-    # addition on numbers
-    if type(a) == type(b) == \Number
-        b + a
-    # overload: scanr on function, array
-    else if type(a) is \Function and type(b) is \Array
-        b[til b.length - 1].reverse!reduce ((previous, nextitem) ->
-            previous.concat push a, [previous[*-1], nextitem]), [b[*-1]]
-    # overload: scanl on array, function
-    else if type(a) is \Array and type(b) is \Function
-        a[1 to].reduce ((previous, nextitem) ->
-            previous.concat push b, [previous[*-1], nextitem]), [a[0]]
+# Number, Number
+add = arity 2 (a, b) -> a + b
 
-export sub = arity(2) (a, b) ->
-    # subtraction on numbers
-    if type(a) == type(b) == \Number
-        b - a
-    # overload: filter on function, array
-    else if type(a) is \Function and type(b) is \Array
+# Function, Array
+scanr = arity 2 (a, b) ->
+    b[til b.length - 1].reverse!reduce ((previous, nextitem) ->
+        previous.concat push a, [previous[*-1], nextitem]), [b[*-1]]
+
+# Function, Array
+scanl = arity 2 (a, b) -> 
+    b[1 to].reduce ((previous, nextitem) ->
+        previous.concat push a, [previous[*-1], nextitem]), [b[0]]
+
+# Number, Number
+sub = arity 2 (a, b) -> b - a
+
+# Function, Array
+filter = arity 2 (a, b) ->
         b.filter ->
             truthy(push a, [it] .0) # only first element of result is checked
-    # overload: filter on array, function
-    else if type(a) is \Array and type(b) is \Function
-        a.filter ->
-            truthy(push b, [it] .0) # only first element of result is checked
-    # overload: filter on function, sequence
-    else if type(a) is \Function and type(b) is \Sequence
-        b.add-transform {
-            type: \filter
-            func: a
-        }
-        b
 
-export mul = arity(2) (a, b) ->
-    # multiplication on numbers
-    if type(a) == type(b) == \Number
-        b * a
-    # overload: fmap on function, array
-    else if type(a) is \Function and type(b) is \Array
-        flatten b.map ->
-            push a, [it]
-    # overload: fmap on array, function
-    else if type(a) is \Array and type(b) is \Function
-        flatten a.map ->
-            push b, [it]
-    # overload: fmap on function, sequence
-    else if type(a) is \Function and type(b) is \Sequence
-        b.add-transform {
-            type: \map
-            func: a
-        }
-        b
+# Number, Number
+mul = arity 2 (a, b) -> b * a
 
-export div = arity(2) (a, b) ->
-    # division on numbers
-    if type(a) == type(b) == \Number
-        b / a
-    # overload: foldr on function, array
-    else if type(a) is \Function and type(b) is \Array
-        b[til b.length - 1].reverse!reduce((prev, val) ->
-            push a, push val, prev
-        , [b[*-1]])[*-1] # TODO: something about this, maybe
-    # overload: foldl on array, function
-    else if type(a) is \Array and type(b) is \Function
-        a[1 to].reduce((prev, val) ->
-            push b, push val, prev
-        , [a[0]])[*-1]   # TODO: something about this, maybe
+# Function, Array
+fmap = arity 2 (a, b) ->
+    flatten b.map ->
+        push a, [it]
 
-export mod = arity(2) (a, b) -> b % a
+# Number, Number
+div = arity 2 (a, b) -> b / a
 
-export exp = arity(2) (a, b) -> b ^ a
+# Function, Array
+foldr = arity 2 (a, b) ->
+    b[til b.length - 1].reverse!reduce((prev, val) ->
+        push a, push val, prev
+    , [b[*-1]])[*-1] # TODO: something about this, maybe
+    
+# Function, Array
+foldl = arity 2 (a, b) ->
+    b[1 to].reduce((prev, val) ->
+        push a, push val, prev
+    , [b[0]])[*-1]   # TODO: something about this, maybe
 
-export gt = arity(2) (a, b) ->
+# Number, Number
+mod = arity 2 (a, b) -> b % a
+
+# Number, Number
+exp = arity 2 (a, b) -> b ^ a
+
+# Number, Number
+# Array, Array ?
+gt = arity 2 (a, b) ->
     if b > a then 1 else 0
 
-export lt = arity(2) (a, b) ->
+# Number, Number
+# Array, Array ?
+lt = arity 2 (a, b) ->
     if b < a then 1 else 0
 
-export eq = arity(2) (a, b) ->
+# Any, Any
+eq = arity 2 (a, b) ->
     return 1 if a is b
     return 0 if type(a) != type(b)
     if type(a) is \Array
@@ -230,70 +178,56 @@ export eq = arity(2) (a, b) ->
     else if type(a) is \Function
         return 0 unless a.is-fseq and b.is-fseq
         return eq(a.seq, b.seq)
-    else if type(a) is \Sequence
-        return 0 unless eq(a.get-next, b.get-next)
-        len = Math.max(a.length, b.length)
-        a.ensure-length len
-        b.ensure-length len
-        return eq(a.base-seq, b.base-seq)
     return 0
 
-export dup = manualpush arity(1) (stack) !->
-    top = stack.pop!
-    stack.push top
-    stack.push top
-
-export drop1 = manualpush arity(1) (stack) !->
-    stack.pop!
-
-export swap = manualpush arity(2) (stack) !->
-    a = stack.pop!
-    b = stack.pop!
-    stack.push a
-    stack.push b
-
-export apply = manualpush arity(1) (stack) !->
+# Any
+export apply = manualpush arity 1 (stack) !->
     # re-push an item using the push function.
     # this means an fseq will be guaranteed to be applied.
     push stack.pop!, stack
 
-export incl-range = arity(2) (a, b) ->
+# Number, Number
+incl-range = arity 2 (a, b) ->
     if a > b
         [b to a]
     else
         [b to a by -1]
 
-export unary-range = arity(1) (a) ->
-    if type(a) is \Number
-        if a >= 0
-            [0 til a]
-        else
-            [0 til a by -1]
+# Number
+unary-range = arity 1 (a) ->
+    if a >= 0
+        [0 til a]
+    else
+        [0 til a by -1]
 
-export pack = manualpush arity(0) (stack) !->
+# Any...
+pack = manualpush arity 0 (stack) !->
     # packs up the current stack and pushes it as an array
-    s = [stack.pop! for til stack.length]
-    stack.push s.reverse!
+    s = [stack.shift! for til stack.length]
+    stack.push s
 
-export unpack = manualpush arity(1) (stack) !->
+# Array
+unpack = manualpush arity 1 (stack) !->
     a = stack.pop! # an array whose contents you want on the stack
-    return a if type(a) isnt \Array
     for item in a
         stack.push item # note that nothing is applied
 
-export rot = manualpush arity(0) (stack) !->
+# Any...
+rot = manualpush arity 0 (stack) !->
     # cycles the third item from the top to the front of the stack
-    stack.splice 0, stack.length, ...rotate 3 1 stack
+    stack.splice 0, stack.length, ...rotate 3, 1, stack
 
-export length = arity(1) (a) ->
-    if type(a) is \Number
-        Math.abs a
-    else if type(a) is \Array or type(a) is \Sequence
-        a.length
-    else if type(a) is \Function
-        a.arity
+# Number
+abs = arity 1 (a) -> Math.abs a
 
-export concat = arity(2) (a, b) ->
+# Array
+length = arity 1 (a) -> a.length
+    
+# Function
+get-arity = arity 1 (a) -> a.arity
+
+# Any, Any
+concat = arity 2 (a, b) ->
     if type(a) isnt \Array and type(b) isnt \Array
         [b, a]
     else if type(a) is \Array and type(b) isnt \Array
@@ -303,128 +237,137 @@ export concat = arity(2) (a, b) ->
     else if type(a) == type(b) == \Array
         b ++ a
 
-export repeat = manualpush arity(2) (stack) !->
+# Number, Any
+repeat = manualpush arity 2 (stack) !->
     a = stack.pop! # number of times to repeat
     b = stack.pop! # the thing to repeat
     for til a
-        push b, stack
+        push b, stack # note that `b` is applied each time
 
-export while-loop = manualpush arity(2) (stack) !->
-    a = stack.pop! # loop condition
-    b = stack.pop! # item to push while the condition is true
-    loop
-        push a, stack
-        result = stack.pop! # note that the result is consumed
-        if result
-            push b, stack
-        else break
+# Number, Array
+take = arity 2 (a, b) ->
+    # returns the first `a` elements of `b`, or b[0..a] if a > b.length
+    return [] if a == 0
+    return b if Math.abs(a) >= b.length
+    return drop(b.length + a, b) if a < 0
+    b[til Math.floor(a)]
 
-export take = arity(2) (a, b) ->
-    if type(b) is \Array
-        return [] if a == 0
-        return b if Math.abs(a) >= b.length
-        return drop(b.length + a, b) if a < 0
-        b[til Math.floor(a)]
-    else if type(b) is \Sequence
-        b.ensure-length(Math.floor(a))
-        b.seq[til Math.floor(a)]
+# Number, Array
+drop = arity 2 (a, b) ->
+    # removes the first `a` elements of `b`, returning b or [] if a > b.length
+    return b if a == 0
+    return [] if Math.abs(a) >= b.length
+    return take(b.length + a, b) if a < 0
+    b[Math.floor(a) to]
 
-export drop = arity(2) (a, b) ->
-    if type(b) is \Array
-        return b if a == 0
-        return [] if Math.abs(a) >= b.length
-        return take(b.length + a, b) if a < 0
-        b[Math.floor(a) to]
-    else if type(b) is \Sequence
-        b.ensure-length(Math.floor(a))
-        b.seq = drop(a, b.seq)
-        b
-
-export bit-select = arity(2) (a, b) ->
-    # selects particular indices of an array using an array of indices or a number's bits
-    if type(a) is \Number
-        a = Math.floor(a).to-string(2).split("").reverse!reduce((prev, val, i) ->
-            prev.push i if val != "0"
-            prev
-        , [])
-    if type(b) is \Number
-        b = Math.floor(b).to-string(2).split("").reverse!reduce((prev, val, i) ->
-            prev.push i if val != "0"
-            prev
-        , [])
-    if type(b) is \Array
-        [b[i] for i in a when i < b.length]
-    else if type(b) is \Sequence
-        [b.get(i) for i in a]
-
-# a data structure representing lazily-generated infinite sequences
-export class Sequence
-    (@get-next, @base-seq = [0]) ~>
-        @transforms = [] # should contain {type, func} objects
-        @seq = []        # the sequence, filtered and mapped
-        @base-pos = 0    # the element being accessed by the transform processor
-
-    get: (index) ->
-        if @ensure-length(index + 1)
-            @seq[index]
-        else
-            null
-
-    lengthen-base-seq: ->
-        #console.log "base: #{JSON.stringify @base-seq}"
-        #console.log "seq:  #{JSON.stringify @seq}"
-        @base-seq.push (push @get-next, ^^@base-seq)[*-1]
-
-    add-transform: (transform) ->
-        # adds and applies a new map or filter operation over the sequence;
-        # this affects all future values of the sequence as you'd expect
-        switch transform.type
-        case \filter
-            @seq = sub(transform.func, @seq)
-            @length = @seq.length
-            @transforms.push transform
-        case \map
-            @seq = mul(transform.func, @seq)
-            @length = @seq.length
-            @transforms.push transform
-
-    ensure-length: (desired-length, give-up-after = 100) ->
-        # ensures that the sequence contains at least `desired-length` elements
-        times-tried = 0
-        :main until @seq.length >= desired-length
-            @lengthen-base-seq!
-            item = [@base-seq[@base-pos]]
-            for transform in @transforms
-                switch transform.type
-                case \filter
-                    unless truthy (push transform.func, ^^item)[*-1]
-                        @base-pos++
-                        return false if (times-tried++ > give-up-after)
-                        continue main
-                    times-tried = 0
-                case \map
-                    item = push transform.func, item
-            @seq .= concat item
-            @base-pos++
-        return true # notify success
-
-export sequence1 = arity(1) (a) ->
-    # constructs a sequence with initial base sequence of [0] by default
-    Sequence a
-
-export sequence2 = arity(2) (a, b) ->
-    # constructs a sequence using `b` as the initial base sequence
-    Sequence a, b
-
-export elem = arity(2) (a, b) ->
+# Number, Array
+elem = arity 2 (a, b) ->
     # takes the `a`-th element of `b`
     if type(b) is \Array
         b[a]
-    else if type(b) is \Sequence
-        b.get(a)
 
-export neg = arity(1) (a) ->
-    if type(a) is \Number
-        -a - 1
-    else if type(a) is \Array
-        a.reverse!
+# Number
+neg = arity 1 (a) -> -a
+
+# Array
+reverse = arity 1 (a) -> a.reverse!
+
+
+
+#
+# Functions to help interfacing with the interpreter environment
+#
+
+
+
+# decorator-ish thing to set input types of a function.
+# this only has an effect when generating the builtin core
+# if a certain type shouldn't be checked, use `null` in the list.
+# this function allows builtin functions to be interpreted with checked types.
+# overloads are not strictly possible with `takes`, but trivial to make in the language itself.
+takes = (typelist, f) -->
+    f.type-req = typelist
+    f
+
+
+# function to create the nesting structure needed to import
+# builtin functions into the interpreter.
+# ENV can be supplied to supplement an existing environment
+make-environment = (env-dict, ENV={}) ->
+    for key of env-dict
+        builtin-f = env-dict[key] # the builtin function
+        arity = builtin-f.arity ? 0
+        types = builtin-f.type-req ? [null for til arity]
+        param-counter = 0
+        params = for let type in types
+            { 
+                anonymous: true 
+                type: type # set to null for no checking
+                name: param-counter++ # all parameters are anonymous of course 
+            }
+        func = {
+            type: \function
+            name: key
+            params: params
+            typechecks: types.filter((x) -> x != null).length
+            valuechecks: 0
+            arity: builtin-f.arity
+            value: [{
+                type: \native-function
+                value: builtin-f
+            }]
+        }
+        if key of ENV
+            ENV[key].overloads.push func
+        else
+            ENV[key] = {
+                type: \function
+                name: key
+                overloads: [func]
+            }
+    return ENV
+
+export get-environment = (extended=false, ENV={}) ->
+    make-environment(core-basic, ENV)
+    if extended
+        make-environment(core-extra, ENV)
+    return ENV
+
+# the most basic functionality, not able to be implemented within Woden
+core-basic = {
+    "+": takes ["Number", "Number"], add
+    "-": takes ["Number", "Number"], sub
+    "*": takes ["Number", "Number"], mul
+    "/": takes ["Number", "Number"], div
+    "%": takes ["Number", "Number"], mod
+    "^": takes ["Number", "Number"], exp
+    "<": takes ["Number", "Number"], lt
+    ">": takes ["Number", "Number"], gt
+    "=": eq
+    "apply": apply
+    "join": concat
+    "elem": takes ["Number", "Array"], elem
+    "drop": takes ["Number", "Array"], drop
+    "take": takes ["Number", "Array"], take
+    "length": takes ["Array"], length
+    "reverse": takes ["Array"], reverse
+}
+
+# an extension dictionary of more functionality for convenience.
+# these functions can mostly be written within Woden, but these versions
+# are potentially faster (and easier to start using, of course)
+core-extra = {
+    "range": takes ["Number", "Number"], incl-range
+    "iota": takes ["Number"], unary-range
+    "scanr": takes ["Function", "Array"], scanr
+    "scan": takes ["Function", "Array"], scanl
+    "filter": takes ["Function", "Array"], filter
+    "fmap": takes ["Function", "Array"], fmap
+    "neg": takes ["Number"], neg
+    "abs": takes ["Number"], abs
+    "foldr": takes ["Function", "Array"], foldr
+    "fold": takes ["Function", "Array"], foldl
+    "repeat": takes ["Number", null], repeat
+    "pack": pack
+    "unpack": takes ["Array"], unpack
+}

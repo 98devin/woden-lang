@@ -31,6 +31,7 @@ ops =
     "T": b.type
     "i": b.unary-range
     "~": b.neg
+    ".": b.id
 
 # special meaning prefix operators.
 # the value of each key is its function, number of arguments and whether its args should be evaluated.
@@ -112,8 +113,10 @@ The grammar as implemented currently:
 
         <operator> ::= "+" | "-" | ... | "i" | "~"
 
- <prefix operator> ::= <prefix> <atom>
-          <prefix> ::= "`" | "ᚶ" | "ᚽ" | "ᛑ" | "ᛙ" | "?"
+ <prefix operator> ::= <arity 1 prefix> <atom>
+                     | <arity 2 prefix> <atom> <atom>
+  <arity 1 prefix> ::= "`" | "ᚽ" | "ᛑ" | "ᛙ"
+  <arity 2 prefix> ::= "ᚶ" | "?"
 */
 
 # a new-and-improved parser using recursive descent.
@@ -123,7 +126,6 @@ export parse = (string, flags={}) ->
     pos     = 0
     codestr = string.trim!
                     .replace "\n", "¦"
-                    #.replace "\r", ""
                     .replace //[^#{JSON.stringify character-encoding}]//g, ""
 
     # facilities for printing better verbose-mode stuff
@@ -202,6 +204,23 @@ export parse = (string, flags={}) ->
 
     # parse one block reference
     accept-block-reference = ->
+        return null unless peek-char! is "$"
+        if flags.verbose
+            console.log indentation! + "Accepting Block Reference..."
+            depth++
+        advance-char! # to pass over the $ character
+        refnum = accept-number!
+        return null if refnum is null
+        if flags.verbose
+            depth --
+            console.log indentation! + "...Block Reference accepted."
+        return {
+            type: \block-reference
+            value: refnum.value
+        }
+
+    /* The very concise but annoying to test way
+    accept-block-reference = ->
         return null unless peek-char! in "⁰¹²³⁴⁵⁶⁷⁸⁹"
         if flags.verbose
             console.log indentation! + "Accepting Block Reference..."
@@ -218,6 +237,7 @@ export parse = (string, flags={}) ->
             type: \block-reference
             value: real-value
         }
+    */
 
     # parse one operator (one-character operators only for now)
     accept-operator = ->
@@ -347,7 +367,7 @@ export parse = (string, flags={}) ->
         }]
         while not code-end!
             accept-whitespace!
-            if peek-char! is "¦"
+            if peek-char! in "¦|"
                 console.log "Beginning new block." if flags.verbose
                 blocks.push {
                     type: \block

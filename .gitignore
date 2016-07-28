@@ -1,3 +1,5 @@
 .idea
+.vscode
 *.pyc
 *.js
+node_modules
