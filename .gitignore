@@ -3,3 +3,4 @@
 *.pyc
 *.js
 node_modules
+.npmignore
