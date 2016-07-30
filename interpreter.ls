@@ -135,7 +135,7 @@ lex = (codestr) ->
                      # this uses (?=(exp))\1 to emulate (?>exp) atomic groups
                      .replace(/\((?=(#+))\1[^#\)](?:[\s\S]*?[^#])?\1\)/gm, "")
                      # remove comments of the form ## ...
-                     .replace(/\/\/.*$/gm, "")
+                     .replace(/##.*$/gm, "")
                      
     tokens = [] # the eventual return value of the lexer
 
@@ -428,7 +428,7 @@ parse = (tokens, ENV={}) ->
 
 
 # this import is basically just for the `push`, `mega-fseq`, `truthy`, and `type` functions
-builtins = require "./builtins.js"
+require! "./builtins"
 
 # slightly configured stringifier for nicer output
 stringify = (a) ->
@@ -610,7 +610,7 @@ flags = require \yargs # uses yargs to parse CLI arguments
 
 fs = require \fs
 
-repl = ->
+export repl = ->
     # setup a persistent environment for the repl
     # this enables function definitions to remain across inputs
     env = {}

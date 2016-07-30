@@ -11,7 +11,34 @@ using the Woden REPL (the `-p` flag to enable persistence is recommended)
 or within a file. I would be honored if you experimented
 with the language and contributed bug findings, opinions, and ideas.
 
-#
+## How to use Woden
+To run the woden interpreter you'll need to install livescript.
+First install nodejs and npm in whichever way is appropriate for your system, and then,
+install it with
+```
+npm install livescript -g
+```
+Then, to run the interpreter you have two options. Either run it directly with livescript:
+```
+lsc interpreter
+```
+Or, compile it to javascript and run with node:
+```
+lsc -c builtins interpreter
+node interpreter
+```
+
+Eventually I plan to make Woden an npm package, which should make usage
+and setup much simpler.
+
+The `-h` flag will show all the command line options.
+Listing no options will begin the REPL, and listing filenames
+will run the interpreter on each in order, with a persistent namespace.
+This means that while "importing" files is not really possible, listing them
+first will make all their definitions available in later files.
+
+
+# Syntax
 ```
 (# First things first!
    This is a multiline comment #)
@@ -42,7 +69,7 @@ with the language and contributed bug findings, opinions, and ideas.
 ## Numbers
 
 Number literals in Woden are unsurprising if one
-has experience a C-like language, with some
+has experience with a C-like language, with some
 exceptions. Currently all numbers must be written in base 10, but this may change.
 
 Working examples for whole numbers include:
