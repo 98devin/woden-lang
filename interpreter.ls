@@ -22,7 +22,7 @@ identifier =
 
 operator-identifier =
     type: \identifier
-    regex: /^[-~!@#$%^&*+=;:<>,.?\/\\]+/
+    regex: /^[-~!@$%^&*+=;:<>,.?\/\\]+/
     # matches operator-like idenifiers like the following:
         # +
         # -
@@ -619,6 +619,7 @@ export repl = ->
         builtins.get-environment(flags.basic < 1, env)
 
     # setup/start the test REPL
+    process.stdin.resume!
     process.stdin.set-encoding \utf8
     process.stdout.write "Woden REPL started.\nType `\\quit` to end execution, or `\\reset` to clear environmental variables.\n" 
     process.stdout.write ">> "
@@ -644,6 +645,7 @@ export repl = ->
             process.stdout.write "Parsed program: #{JSON.stringify program, null, "  "} \n"
         
         interpret(program, env, stack)
+        
         process.stdout.write ">> "
 
 

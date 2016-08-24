@@ -12,20 +12,20 @@ or within a file. I would be honored if you experimented
 with the language and contributed bug findings, opinions, and ideas.
 
 ## How to use Woden
-To run the woden interpreter you'll need to install livescript.
-First install nodejs and npm in whichever way is appropriate for your system, and then,
-install it with
+To use Woden, first clone this repo. Then install [node.js](https://nodejs.org/en/) (and npm)
+in whichever way is recommended for your system. To setup Woden's dependencies, `cd` into the cloned directory and:
 ```
-npm install livescript -g
+$ npm install livescript -g
+$ npm install yargs
 ```
 Then, to run the interpreter you have two options. Either run it directly with livescript:
 ```
-lsc interpreter
+$ lsc interpreter
 ```
 Or, compile it to javascript and run with node:
 ```
-lsc -c builtins interpreter
-node interpreter
+$ lsc -c builtins interpreter
+$ node interpreter
 ```
 
 Eventually I plan to make Woden an npm package, which should make usage
@@ -58,7 +58,7 @@ first will make all their definitions available in later files.
 (# Or (## this ##) way #)
 
 ## This is a single-line comment.
-## It ends at the newline, like in C, Java, etc.
+## It ends at the next newline, like // in C, Java, etc.
 ## Pretty simple, really.
 ```
 
@@ -130,6 +130,7 @@ following are also technically array literals:
 "Just an array"  ## So meta
 "Real strings are for chumps"  ## Debatable
 ```
+
 More about arrays later, when it'll be more relevant.
 
 
@@ -210,14 +211,12 @@ If a function is referred to when there are not enough values on the stack
 to perform its computation, it will be placed on the stack itself, acting as
 a reference to the function and able to be used as an input to other functions.
 
-For example, if one simply types a lone
-    +
+For example, if one simply types a lone `+`
 into the Woden prompt, it will result in a reference to the function being
 pushed onto the stack, since there are fewer than 2 values (zero, to be precise).
 
 On its own, arity might not seem very valuable, but it plays a large part
 in function overloads, partial application, function composition, etc.
-
 
 
 
@@ -473,7 +472,7 @@ function.
 
 Multiple versions of a function can be defined, which will be referred to as "overloads" from now on.
 These overloads MUST differ from each other in at least one of three ways, or else the
-interpreter has no way to choose between them.
+interpreter will have no way to choose between them.
 
 ## Function overloads on arity
 
@@ -498,16 +497,22 @@ end
 ## 2.
 (18 32 overloaded)  (# Results in 576 by calling the version taking two arguments.
                      # Although the one-argument version is also valid here, the overload
-                     # with the highest arity is always chosen.  #)
+                     # with the highest arity is always chosen if it applies.  #)
 
 overloaded  (# Results in 22464 by calling the two-argument overload on the past two results!
              # Implicit argument-passing is one benefit of a stack-based system.  #)
 ```
 
-Of course, with one function taking on multiple arities, it becomes important sometimes
-to control exactly how many are being passed to it. Surrounding a function with parentheses as was
-done above evaluates it within a separate environment which does not contain the previous contents of the stack.
+Of course, with one function taking on multiple arities, it bSecomes important sometimes
+to control exactly how many values are being passed to it. Surrounding a function with parentheses as shown
+above evaluates it within a separate environment which does not contain the previous contents of the stack.
 This allows access to the lower-arity overloads whenever it is needed.
+
+This syntax with parentheses also allows evaluation of expressions inside arrays.
+Typically, writing `[1 2 +]` is equivalent to `[1 2 {+}]`, because each element of the array is
+evaluated in a separate and empty environment. However, writing `[(1 2 +)]` results in `[3]` because
+the parenthetical expression is evaluated first and pushes the resulting values to the array. Similarly,
+`[(1 2 + 3 4 + 5 6 +)]` is equivalent to `[3 7 11]`.
 
 
 
@@ -558,13 +563,13 @@ define type a[] -> "Array"    end
 More rarely found in a programming language is the ability
 to overload a function based on values, rather than types.
 In Woden, this is done by appending a function literal to the
-end of the parameter, following the type if it is present, e.g.
-
+end of the parameter, following the type if it is present, like so:
+```
 ... parameter_name # { .... } ...
                      ^ here ^
-
-If the function, when applied to the parameter's runtime value
-in an empty stack, results in the top of the stack being truthy,
+```
+If the function applied to the parameter's runtime argument
+in an empty stack results in the top of the stack being truthy,
 it is considered a match. (Because of this, an empty check evaluates
 the truthiness of the value itself. In Woden, everything other than 0
 is considered true. There is no separate boolean type.)
@@ -572,9 +577,9 @@ is considered true. There is no separate boolean type.)
 The following function implements the (recursive) fibonacci function
 using this ability.
 ```
-(# The first two numbers are 0 and 1, so a is simply the answer for a < 2!
+(# The first two numbers are 0 and 1, so for a < 2, fib(a) == a!
  # This is of course flawed if a is negative, but the fibonacci numbers
- # are not defined in that range either, so no big deal.  #)
+ # are not traditionally defined in that range either, so no big deal.  #)
 
 define fibonacci a#{2 <} ->
     a
@@ -583,7 +588,7 @@ end
 
 (# Recursion is as simple as it gets; no special case here!
  # The opposite value check of {1 >} need not be supplied,
- # since overloads with more matching value checks are prioritized anyway.  #)
+ # since the overload with the most matching value checks is prioritized.  #)
 
 define fibonacci a# ->
     (a 2 - fibonacci) (a 1 - fibonacci) +
@@ -594,14 +599,15 @@ end
 
 Function parameters do not need to be named, in fact.
 If they are unnamed, the value they refer to is left intact on the stack instead of being
-consumed when they are bound to a name.
+consumed, but is still type- and value-checked.
 
 A function parameter can be unnamed _only_ if one specifies a type and/or
 value check for it, since otherwise its existence would not be evident. 
 
 If the parameter does not need a name,
-type checking, or value checking, it can be simply left off anyway
-as a result of the stack-based nature of computation in Woden.
+type checking, or value checking, it can be simply left implicit
+as a result of the stack-based nature of computation in Woden (Modifying more stack values
+than your function has arguments should be frowned upon however, as it derails the usefulness of arity/purity).
 
 The exception to this is when one wants to check the type of an unnamed deeper
 value on the stack, but wants an unnamed unchecked first parameter as well. This is
@@ -621,10 +627,12 @@ can be transformed into this one, using unnamed parameters:
 ```
 define add # # -> + end
 ```
+This has the advantage of preserving type safety and arity information
+while not forcing the writer to repeat themselves.
 
-Perhaps more useful is the ability to use unnamed parameters to deliberately not consume 
-values from the stack when it isn't necessary. The `type` function written previously could
-be made to do this like so:
+Also useful is the ability to use unnamed parameters to deliberately not consume 
+values from the stack when doing so isn't necessary. The `type` function written previously could
+be made to do this:
 ```
 ## Because of unnamed parameters, the types are checked but the values stay on the stack.
 define type # -> "Number" end
@@ -690,6 +698,55 @@ end
 99 182 max  ## -> 182
 [1 292 10 932 8 99] max  ## -> 932
 max  ## -> 932 
+```
+
+## Unlambda interpreter/DSL
+It is easy to implement the basic semantics of [Unlambda](http://www.madore.org/~david/programs/unlambda/) within Woden, as it turns out.
+Here is a simple way of doing so:
+```
+## Convenience declarations (especially ! for apply)
+define ! -> apply end
+define . -> putc  end
+
+## "r" shortcut to print newline
+define r -> { 10 . } end
+
+## ".*" shortcut to print asterisk (just for convenience, not in the spec)
+define .* -> { '* . } end
+
+## Curried "k" combinator
+define k       -> {   k_1 } end
+define k_1 a   -> { a k_2 } end
+define k_2 a b -> 
+    a
+end
+
+## Curried "s" combinator
+define s         -> {     s_1 } end
+define s_1 a     -> {   a s_2 } end
+define s_2 a b   -> { b a s_3 } end
+define s_3 a b c ->
+    c b ! c a ! !
+end
+
+## Curried "v" function
+define v     -> `v_1 end
+define v_1 a -> `v_1 end
+
+## "i" function
+define i -> {  } end  ## the identity function is achieved by doing nothing to its arguments
+
+```
+The `d` construct specified in Unlambda would be harder to implement however, and has been left out of this sample.
+However, even with just these functions, we can execute the first example program on the Unlambda site successfully:
+
+```
+## Fibonacci sequence printer (per unlambda website, albeit in reverse order here due to postfix notation)
+## This is _extremely_ slow, but does work as expected. What is to blame for the speed (the interpreter or the calculation method) is unclear...
+k s k ! s ! ! k !
+k k i s ! k ! s ! ! r k ! s ! k ! s ! ! s k ! s ! ! s ! ! s k ! s ! k ! s ! !
+s k ! s ! ! s ! ! .* k !
+i k ! i i s ! ! s ! ! s ! ! !
 ```
 
 More examples will be added here over time.

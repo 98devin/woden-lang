@@ -200,7 +200,7 @@ unary-range = arity 1 (a) ->
     else
         [0 til a by -1]
 
-# Any...
+#
 pack = manualpush arity 0 (stack) !->
     # packs up the current stack and pushes it as an array
     s = [stack.shift! for til stack.length]
@@ -211,11 +211,6 @@ unpack = manualpush arity 1 (stack) !->
     a = stack.pop! # an array whose contents you want on the stack
     for item in a
         stack.push item # note that nothing is applied
-
-# Any...
-rot = manualpush arity 0 (stack) !->
-    # cycles the third item from the top to the front of the stack
-    stack.splice 0, stack.length, ...rotate 3, 1, stack
 
 # Number
 abs = arity 1 (a) -> Math.abs a
@@ -272,6 +267,11 @@ neg = arity 1 (a) -> -a
 # Array
 reverse = arity 1 (a) -> a.reverse!
 
+# Number
+putchar = manualpush arity 1 (stack) !->
+    # converts top of the stack to a character using UTF-8, and prints it
+    process.stdout.write(String.from-char-code(stack.pop!))
+
 
 
 #
@@ -280,7 +280,7 @@ reverse = arity 1 (a) -> a.reverse!
 
 
 
-# decorator-ish thing to set input types of a function.
+# decorator-ish thing to set input types of a core function.
 # this only has an effect when generating the builtin core
 # if a certain type shouldn't be checked, use `null` in the list.
 # this function allows builtin functions to be interpreted with checked types.
@@ -341,22 +341,19 @@ core-basic = {
     "/": takes ["Number", "Number"], div
     "%": takes ["Number", "Number"], mod
     "^": takes ["Number", "Number"], exp
-    "<": takes ["Number", "Number"], lt
     ">": takes ["Number", "Number"], gt
     "=": eq
     "apply": apply
+    "putc": takes ["Number"], putchar
     "join": concat
     "elem": takes ["Number", "Array"], elem
-    "drop": takes ["Number", "Array"], drop
-    "take": takes ["Number", "Array"], take
-    "length": takes ["Array"], length
-    "reverse": takes ["Array"], reverse
 }
 
 # an extension dictionary of more functionality for convenience.
 # these functions can mostly be written within Woden, but these versions
 # are potentially faster (and easier to start using, of course)
 core-extra = {
+    "<": takes ["Number", "Number"], lt
     "range": takes ["Number", "Number"], incl-range
     "iota": takes ["Number"], unary-range
     "scanr": takes ["Function", "Array"], scanr
@@ -370,4 +367,8 @@ core-extra = {
     "repeat": takes ["Number", null], repeat
     "pack": pack
     "unpack": takes ["Array"], unpack
+    "drop": takes ["Number", "Array"], drop
+    "take": takes ["Number", "Array"], take
+    "length": takes ["Array"], length
+    "reverse": takes ["Array"], reverse
 }
