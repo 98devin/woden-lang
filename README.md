@@ -275,7 +275,7 @@ that the `+` function is not actually applied to whatever may be on the stack ot
 
 This single-element function literal pattern is quite common because of this use case,
 and so Woden includes a second syntax for specifying a one-element anonymous function.
-Simply put a backtick: ` ` ` before a value/identifier of any kind, and it will be encapsulated in a function.
+Simply put a backtick: ` before a value/identifier of any kind, and it will be encapsulated in a function.
 
 Examples:
 ```
@@ -382,7 +382,7 @@ In this way, one could make a function like the below:
 define addTwo -> 2 + end
 ```
 
-This function is equivalent to the literal {2 +} except it is always applied and can be referred
+This function is equivalent to the literal `{2 +}` except it is always applied and can be referred
 to by name. To achieve true equivalence, simply do the same as was done for `+` earlier, and
 wrap the name in a literal so it isn't immediately applied:
 ```
@@ -427,9 +427,9 @@ it appears to be worthwhile.
 
 A function with arguments is also not prevented from accessing the stack for more data if necessary.
 The main motivation for named arguments in Woden was not encapsulation or purity, but a lessening
-of need to use functions solely to manipulate the position of items on the stack, instead
-linking them to names so they can be reordered and reused in whichever way the programmer chooses.
-If preventing access to the external stack is desired, surrounding the function body in parentheses achieves this.
+of need to use functions dedicated solely to manipulating the position of items on the stack, and instead
+linking stack items to names so they can be reordered and reused in whichever way the programmer chooses.
+If preventing access to the overall stack is desired, surrounding the function body in parentheses achieves this.
 
 However, using arguments, it is trivial in Woden to define the most common stack-changing
 functions such as `dup`, `swap`, `drop`, `rot` etc.
@@ -503,7 +503,7 @@ overloaded  (# Results in 22464 by calling the two-argument overload on the past
              # Implicit argument-passing is one benefit of a stack-based system.  #)
 ```
 
-Of course, with one function taking on multiple arities, it bSecomes important sometimes
+Of course, when one function takes on multiple arities, it becomes important sometimes
 to control exactly how many values are being passed to it. Surrounding a function with parentheses as shown
 above evaluates it within a separate environment which does not contain the previous contents of the stack.
 This allows access to the lower-arity overloads whenever it is needed.
